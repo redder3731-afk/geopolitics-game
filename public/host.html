@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Геополитика — Главный Экран</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body { background: #0d1117; color: #e6edf3; font-family: sans-serif; margin: 0; padding: 20px; display: flex; gap: 20px; height: 95vh; box-sizing: border-box; }
+    .left { flex: 2; display: flex; flex-direction: column; }
+    .right { flex: 1; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 15px; display: flex; flex-direction: column; }
+    h1 { margin-top: 0; color: #58a6ff; }
+    .stats-bar { display: flex; gap: 20px; font-size: 1.2rem; margin-bottom: 15px; background: #161b22; padding: 12px; border-radius: 8px; border: 1px solid #30363d; }
+    table { width: 100%; border-collapse: collapse; background: #161b22; border-radius: 8px; overflow: hidden; }
+    th, td { padding: 14px; text-align: left; border-bottom: 1px solid #30363d; font-size: 1.1rem; }
+    th { background: #21262d; color: #8b949e; }
+    .dead { opacity: 0.5; text-decoration: line-through; }
+    .btn { margin-top: 20px; padding: 16px; font-size: 1.2rem; font-weight: bold; background: #238636; color: white; border: none; border-radius: 8px; cursor: pointer; }
+    .btn:hover { background: #2ea043; }
+    #logs { flex: 1; overflow-y: auto; font-family: monospace; font-size: 0.95rem; line-height: 1.5; }
+    .log-line { margin-bottom: 8px; border-bottom: 1px dashed #21262d; padding-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <div class="left">
+    <h1>🌍 ГЕОПОЛИТИКА: СИТУАЦИОННЫЙ ЦЕНТР</h1>
+    <div class="stats-bar">
+      <div>Ход: <strong id="turn">1</strong></div>
+      <div>Запущено ракет: <strong id="launches">0 / 4</strong> ☢️</div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Держава</th>
+          <th>Статус</th>
+          <th>⚡️ Влияние</th>
+          <th>🚀 Ракеты</th>
+          <th>🤝 Пакты</th>
+          <th>Приказ</th>
+        </tr>
+      </thead>
+      <tbody id="players-body"></tbody>
+    </table>
+    <button class="btn" onclick="resolveTurn()">ВСКРЫТЬ ПРИКАЗЫ И ЗАВЕРШИТЬ ХОД</button>
+  </div>
+
+  <div class="right">
+    <h3>📡 Сводка событий</h3>
+    <div id="logs"></div>
+  </div>
+
+  <script>
+    const socket = io();
+    socket.emit('register_host');
+
+    socket.on('state_update', (state) => {
+      document.getElementById('turn').innerText = state.turnNumber;
+      document.getElementById('launches').innerText = `${state.totalLaunches} / 4`;
+      const tbody = document.getElementById('players-body');
+      tbody.innerHTML = '';
+
+      state.players.forEach(p => {
+        const tr = document.createElement('tr');
+        let status = p.alive ? '🟢 Активна' : '🕶 Теневое прав-во';
+        if (p.alive && p.sanctioned) status = '🚫 Под санкциями';
+        else if (p.alive && p.immune) status = '🛡 Иммунитет к санкц.';
+
+        tr.innerHTML = `
+          <td class="${p.alive ? '' : 'dead'}"><strong>${p.name}</strong></td>
+          <td>${status}</td>
+          <td>${p.influence} / 10</td>
+          <td>${'🚀'.repeat(p.rockets) || '0'}</td>
+          <td>${p.pactsWith.join(', ') || '—'}</td>
+          <td>${p.sanctioned ? 'Пропуск' : (p.ready ? '✅ Готов' : '⏳ Думает...')}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    });
+
+    socket.on('host_log', (messages) => {
+      const logsDiv = document.getElementById('logs');
+      messages.forEach(m => {
+        const div = document.createElement('div');
+        div.className = 'log-line';
+        div.innerText = m;
+        logsDiv.prepend(div);
+      });
+    });
+
+    function resolveTurn() {
+      socket.emit('resolve_turn');
+    }
+  </script>
+</body>
+</html>
