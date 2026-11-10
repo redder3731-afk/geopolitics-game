@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Геополитика — Тактический Терминал</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card: #151c2c;
+      --card-hover: #1e293b;
+      --border: #2a364f;
+      --accent: #3b82f6;
+      --green: #10b981;
+      --red: #ef4444;
+      --gold: #f59e0b;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0; padding: 0; background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding-bottom: 80px;
+    }
+    .container { max-width: 600px; margin: 0 auto; padding: 14px; }
+    .hidden { display: none !important; }
+
+    .top-bar {
+      background: rgba(21, 28, 44, 0.95); backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border); padding: 10px 14px;
+      position: sticky; top: 0; z-index: 50;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .top-metrics { display: flex; gap: 12px; font-size: 0.9rem; font-weight: 600; }
+    .badge { background: #1e293b; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--border); }
+    .timer-pill { font-family: monospace; font-size: 1.15rem; font-weight: bold; color: var(--green); }
+    .urgent { color: var(--red) !important; animation: pulse 0.8s infinite; }
+    @keyframes pulse { 50% { opacity: 0.4; } }
+
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 14px; padding: 14px; margin-bottom: 14px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+    }
+    h2, h3, h4 { margin-top: 0; }
+    input, select {
+      width: 100%; padding: 13px; border-radius: 10px; border: 1px solid var(--border);
+      background: #0f1523; color: var(--text); font-size: 1rem; margin-bottom: 10px;
+    }
+    .btn {
+      width: 100%; padding: 14px; border-radius: 10px; border: none;
+      font-size: 1rem; font-weight: 700; color: white; background: var(--accent);
+      cursor: pointer; transition: 0.15s;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-confirm { background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 4px 14px rgba(16,185,129,0.35); }
+    .btn-ConfirmDisabled { background: #334155; color: var(--muted); box-shadow: none; pointer-events: none; }
+    .btn-danger { background: var(--red); }
+
+    .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+    .act-card {
+      background: #0f1523; border: 2px solid var(--border); border-radius: 12px;
+      padding: 12px 10px; text-align: left; cursor: pointer; transition: 0.15s;
+      color: var(--text);
+    }
+    .act-card:hover { background: var(--card-hover); }
+    .act-card.active {
+      border-color: var(--accent); background: rgba(59, 130, 246, 0.15);
+      box-shadow: 0 0 12px rgba(59, 130, 246, 0.3);
+    }
+    .act-title { font-weight: 700; font-size: 0.98rem; margin-bottom: 4px; display: block; }
+    .act-sub { font-size: 0.78rem; color: var(--muted); display: block; }
+
+    .mission-banner {
+      background: linear-gradient(135deg, rgba(245,158,11,0.15), rgba(21,28,44,0.9));
+      border: 1px solid rgba(245,158,11,0.5); border-radius: 14px; padding: 14px; margin-bottom: 14px;
+    }
+
+    .player-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 12px; background: #0f1523; border: 1px solid var(--border);
+      border-radius: 10px; margin-bottom: 8px;
+    }
+    .player-row.dead { opacity: 0.45; }
+    .p-name { font-weight: 700; font-size: 1rem; }
+    .p-sub { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+    .p-stats { text-align: right; font-size: 0.9rem; }
+
+    .log-box {
+      max-height: 220px; overflow-y: auto; font-family: monospace; font-size: 0.86rem;
+      background: #090d16; padding: 10px; border-radius: 10px; border: 1px solid var(--border);
+    }
+    .log-item { padding: 5px 0; border-bottom: 1px dashed #1e293b; line-height: 1.4; }
+
+    #chat-feed {
+      height: 250px; overflow-y: auto; background: #090d16; padding: 12px;
+      border-radius: 10px; border: 1px solid var(--border); margin-bottom: 10px;
+    }
+    .msg-bubble {
+      padding: 8px 12px; border-radius: 10px; margin-bottom: 8px; font-size: 0.9rem; max-width: 88%;
+    }
+    .msg-mine { background: rgba(59, 130, 246, 0.2); border: 1px solid var(--accent); margin-left: auto; }
+    .msg-other { background: #1e293b; border: 1px solid var(--border); }
+    .chips-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 8px; }
+    .chip {
+      background: #1e293b; border: 1px solid var(--border); color: var(--text);
+      padding: 6px 10px; border-radius: 99px; font-size: 0.78rem; white-space: nowrap; cursor: pointer;
+    }
+
+    .bottom-nav {
+      position: fixed; bottom: 0; left: 0; right: 0; height: 68px;
+      background: rgba(15, 21, 35, 0.98); backdrop-filter: blur(10px);
+      border-top: 1px solid var(--border); display: flex; z-index: 60;
+    }
+    .nav-item {
+      flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: var(--muted); background: none; border: none; font-size: 0.75rem; font-weight: 600;
+      cursor: pointer; position: relative;
+    }
+    .nav-item .icon { font-size: 1.35rem; margin-bottom: 3px; }
+    .nav-item.active { color: var(--accent); }
+    .unread-dot {
+      position: absolute; top: 8px; right: 26%; background: var(--red); color: white;
+      font-size: 0.68rem; padding: 2px 6px; border-radius: 99px; font-weight: bold;
+    }
+
+    .rules-list dt { font-weight: bold; color: var(--accent); margin-top: 10px; }
+    .rules-list dd { margin: 4px 0 10px 0; font-size: 0.9rem; color: #cbd5e1; line-height: 1.45; }
+
+    #gameover-modal {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 100;
+      display: flex; align-items: center; justify-content: center; padding: 15px;
+    }
+    .modal-box {
+      background: var(--card); border: 2px solid var(--accent); border-radius: 16px;
+      padding: 18px; width: 100%; max-width: 550px; max-height: 90vh; overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ЭКРАН ВХОДА -->
+  <div id="login-view" class="container" style="margin-top: 12vh;">
+    <div class="card" style="text-align: center; padding: 24px 18px;">
+      <div style="font-size: 3rem; margin-bottom: 8px;">🌍</div>
+      <h2 style="margin-bottom: 6px;">ГЕОПОЛИТИКА</h2>
+      <p style="color: var(--muted); font-size: 0.9rem; margin-top: 0; margin-bottom: 20px;">
+        Тактическая игра на переговоры, блеф и ядерное сдерживание
+      </p>
+      <input type="text" id="country-input" placeholder="Введите название вашей страны..." maxlength="20" onkeypress="if(event.key==='Enter') joinGame()" />
+      <button class="btn" onclick="joinGame()">Вступить в игру</button>
+    </div>
+  </div>
+
+  <!-- ОСНОВНОЙ ИНТЕРФЕЙС ИГРЫ -->
+  <div id="app-view" class="hidden">
+    <div class="top-bar">
+      <div class="top-metrics">
+        <span class="badge">Ход: <strong id="ui-turn">1</strong></span>
+        <span class="badge">☢️ <strong id="ui-nukes" style="color:var(--red);">0/4</strong></span>
+        <span class="badge" id="ui-my-res">⚡️0 🚀0</span>
+      </div>
+      <div id="ui-timer" class="timer-pill">03:00</div>
+    </div>
+
+    <div class="container">
+
+      <!-- ВКЛАДКА 1: ХОД ИГРЫ -->
+      <div id="tab-board" class="tab-section">
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <h3 style="margin:0;">🌐 Мировые державы</h3>
+            <span id="phase-status" style="font-size:0.8rem; color:var(--muted);">Ожидание приказов</span>
+          </div>
+          <div id="players-list"></div>
+        </div>
+
+        <div class="card">
+          <h4 style="margin-bottom:10px; color:var(--muted);">⏱ Управление раундом</h4>
+          <div style="display:flex; gap:8px; margin-bottom:8px;">
+            <button class="btn" style="padding:10px; font-size:0.85rem; background:#1e293b; border:1px solid var(--border);" onclick="triggerTimer(180, 'Переговоры')">🗣 Таймер 3:00</button>
+            <button class="btn" style="padding:10px; font-size:0.85rem; background:#1e293b; border:1px solid var(--border);" onclick="triggerTimer(30, 'Запись хода!')">✍️ Таймер 0:30</button>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-confirm" style="padding:11px; font-size:0.9rem;" onclick="socket.emit('resolve_turn')">💥 Вскрыть ход сейчас</button>
+            <button class="btn btn-danger" style="padding:11px; font-size:0.9rem; flex:0.45;" onclick="if(confirm('Начать новую партию?')) socket.emit('reset_game')">🔄 Сброс</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin-bottom:8px;">📡 Сводка событий</h3>
+          <div id="logs-container" class="log-box"></div>
+        </div>
+      </div>
+
+      <!-- ВКЛАДКА 2: ДЕЙСТВИЯ И ПРИКАЗЫ -->
+      <div id="tab-actions" class="tab-section hidden">
+        <div class="mission-banner">
+          <div style="font-size:0.78rem; color:var(--gold); font-weight:700; text-transform:uppercase;">🕵️ Ваша секретная миссия</div>
+          <div id="my-mission-title" style="font-weight:800; font-size:1.08rem; margin:4px 0;"></div>
+          <div id="my-mission-desc" style="font-size:0.88rem; color:#e2e8f0;"></div>
+        </div>
+
+        <div id="sanction-warning" class="card hidden" style="border-color:var(--red); background:rgba(239,68,68,0.15);">
+          <strong style="color:var(--red);">🚫 Вы под санкциями!</strong>
+          <p style="margin:4px 0 0 0; font-size:0.88rem;">В этом ходу вы не можете отдавать приказы. На следующий ход вы получите иммунитет к санкциям.</p>
+        </div>
+
+        <div id="order-panel" class="card">
+          <label style="font-size:0.85rem; color:var(--muted); display:block; margin-bottom:6px;">
+            1. Выберите целевую державу (для Пакта, Санкций, Запуска или ПРО):
+          </label>
+          <select id="action-target"></select>
+
+          <label style="font-size:0.85rem; color:var(--muted); display:block; margin:8px 0 8px 0;">
+            2. Выберите действие на этот ход:
+          </label>
+
+          <div id="alive-grid" class="actions-grid">
+            <button class="act-card" onclick="selectDraft('reform', this)">
+              <span class="act-title">⚡️ Реформа</span>
+              <span class="act-sub">+2 Влияния в запас</span>
+            </button>
+            <button class="act-card" onclick="selectDraft('rocket', this)">
+              <span class="act-title">🚀 Ракета</span>
+              <span class="act-sub">+1 Ракета (макс. 3)</span>
+            </button>
+            <button class="act-card" onclick="selectDraft('shield', this)">
+              <span class="act-title">🛡 Скрытый Щит</span>
+              <span class="act-sub">Отражает 1 удар</span>
+            </button>
+            <button class="act-card" onclick="selectDraft('pact', this)">
+              <span class="act-title">🤝 Пакт с целью</span>
+              <span class="act-sub">+1 Вл., 2 хода мира</span>
+            </button>
+            <button class="act-card" onclick="selectDraft('sanctions', this)">
+              <span class="act-title">🚫 Санкции</span>
+              <span class="act-sub">Цель пропустит ход</span>
+            </button>
+            <button class="act-card" onclick="selectDraft('launch', this)">
+              <span class="act-title">💥 Запуск ракеты</span>
+              <span class="act-sub">Уничтожить цель (-1 🚀)</span>
+            </button>
+          </div>
+
+          <div id="dead-grid" class="hidden" style="margin-bottom:14px;">
+            <button class="act-card" style="width:100%;" onclick="selectDraft('shadow_shield', this)">
+              <span class="act-title">🕶 Теневой Щит для выбранной цели</span>
+              <span class="act-sub">Вы в подполье. Тайно защитите любую выжившую страну от ракеты в этом ходу.</span>
+            </button>
+          </div>
+
+          <div id="draft-preview" style="font-size:0.9rem; color:var(--muted); margin-bottom:10px; text-align:center;">
+            Действие ещё не выбрано
+          </div>
+
+          <button id="confirm-btn" class="btn btn-ConfirmDisabled" onclick="confirmOrder()">
+            ✅ ПОДТВЕРДИТЬ ПРИКАЗ
+          </button>
+        </div>
+      </div>
+
+      <!-- ВКЛАДКА 3: ТАЙНЫЙ ЧАТ -->
+      <div id="tab-chat" class="tab-section hidden">
+        <div class="card">
+          <h3>💬 Тайная дипломатия</h3>
+          <label style="font-size:0.82rem; color:var(--muted);">Получатель шифровки:</label>
+          <select id="chat-target"></select>
+
+          <div id="chat-feed">
+            <div style="color:var(--muted); font-size:0.85rem; text-align:center; margin-top:90px;">
+              Сообщений в этом раунде пока нет.<br>Все переписки видны только вам и получателю.
+            </div>
+          </div>
+
+          <div class="chips-row">
+            <button class="chip" onclick="sendQuick('Го обоюдный Пакт в этом ходу? 🤝')">🤝 Го пакт!</button>
+            <button class="chip" onclick="sendQuick('Кидай санкции в лидера! 🚫')">🚫 Бей лидера</button>
+            <button class="chip" onclick="sendQuick('Не трать ракету, я ставлю Щит 🛡')">🛡 У меня щит</button>
+            <button class="chip" onclick="sendQuick('Тронешь меня — нажму красную кнопку 🚀')">🚀 Угроза</button>
+            <button class="chip" onclick="sendQuick('Я прикрою тебя Теневым щитом 🕶')">🕶 Прикрою</button>
+          </div>
+
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="chat-input" placeholder="Написать тайное сообщение..." style="margin-bottom:0;" onkeypress="if(event.key==='Enter') sendChat()" />
+            <button class="btn" style="width:auto; padding:0 18px;" onclick="sendChat()">➤</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ВКЛАДКА 4: ПАМЯТКА И ПРАВИЛА -->
+      <div id="tab-rules" class="tab-section hidden">
+        
+        <div class="card">
+          <h3>🎯 Суть игры «Геополитика»</h3>
+          <p style="font-size:0.9rem; color:#cbd5e1; line-height:1.5; margin-bottom:10px;">
+            Вы — лидеры мировых держав. Внешне все борются за влияние и выживание, но у каждого игрока есть <strong>секретная миссия</strong>. Победить можно даже после уничтожения своей страны, поэтому привычная логика «последний выживший» здесь не работает.
+          </p>
+          <p style="font-size:0.9rem; color:#cbd5e1; line-height:1.5; margin:0;">
+            Главный нерв игры — <strong>недоверие</strong>. Вслух и в тайном чате можно обещать что угодно, блефовать, заключать союзы и угрожать, но реальную силу имеет только тот приказ, который вы тайно подтвердите кнопкой в конце хода.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>⏱ Как проходит раунд (3 фазы)</h3>
+          <dl class="rules-list">
+            <dt>1. Фаза переговоров (3 минуты)</dt>
+            <dd>Игроки общаются вживую за столом и переписываются в «Тайном чате». Обсуждайте союзы, требуйте обещаний, шантажируйте ракетами и блефуйте насчет своих щитов. <strong>Лгать разрешено!</strong></dd>
+
+            <dt>2. Фаза приказа (30 секунд)</dt>
+            <dd>Переговоры окончены. Каждый игрок переходит во вкладку «⚡️ Приказ», выбирает ровно одно действие (и цель, если нужно) и нажимает <strong>«Подтвердить приказ»</strong>.</dd>
+
+            <dt>3. Вскрытие и последствия</dt>
+            <dd>Как только все подтвердили выбор (или истек таймер), сервер одновременно вскрывает приказы, просчитывает их по строгому приоритету и публикует итоги в «Сводке событий». В начале нового хода архивы тайного чата очищаются.</dd>
+          </dl>
+        </div>
+
+        <div class="card">
+          <h3>📊 Ресурсы и Теневое правительство</h3>
+          <dl class="rules-list">
+            <dt>⚡️ Влияние (от 0 до 10)</dt>
+            <dd>Главный показатель мирного доминирования. Набрав 10 очков влияния, вы мгновенно побеждаете как Гегемон.</dd>
+
+            <dt>🚀 Ракеты (максимум 3 в шахтах)</dt>
+            <dd>Оружие сдерживания и шантажа. Нужны для запусков по конкурентам, но приближают мир к ядерной катастрофе.</dd>
+
+            <dt>🕶 Статус страны (Активна / Теневое правительство)</dt>
+            <dd>Если по вашей стране попала ракета без Щита, ваши очки влияния и ракеты сгорают. Вы больше не можете победить по влиянию, но <strong>остаетесь в игре как Теневое правительство</strong>! Каждый ход вы можете тайно выдавать <strong>Теневой Щит</strong> любой выжившей стране, влияя на финал и выполняя свою секретную миссию.</dd>
+          </dl>
+        </div>
+
+        <div class="card">
+          <h3>⚙️ Памятка действий и приоритетов (Стек)</h3>
+          <p style="font-size:0.88rem; color:var(--muted);">
+            Все приказы срабатывают строго в следующем порядке:
+          </p>
+          <dl class="rules-list">
+            <dt>Приоритет 1: 🛡 Скрытый Щит (и 🕶 Теневой Щит)</dt>
+            <dd>Активируется раньше всех действий. Никто не знает, ставили ли вы щит, пока в вас не прилетит ракета. Отражает 1 удар и исчезает в конце хода.</dd>
+
+            <dt>Приоритет 2: 🤝 Пакт и 🚫 Санкции (Дипломатия)</dt>
+            <dd>
+              • <strong>Пакт:</strong> требует обоюдного согласия! Чтобы пакт сработал, оба игрока должны в один ход выбрать «Пакт» друг с другом. Оба получают <strong>+1 Влияние</strong> и не могут запускать ракеты друг в друга <strong>2 хода</strong>. Если партнер выбрал другое действие — вас предали, и ваш ход сгорает впустую.<br>
+              • <strong>Санкции:</strong> выбранная цель полностью пропускает следующий ход. После пропуска хода страна получает <strong>Иммунитет к санкциям</strong> на 1 раунд (нельзя блокировать одного игрока два хода подряд).
+            </dd>
+
+            <dt>Приоритет 3: ⚡️ Реформа и 🚀 Ракета (Экономика)</dt>
+            <dd>
+              • <strong>Реформа:</strong> приносит +2 Влияния, но оставляет страну открытой для удара.<br>
+              • <strong>Ракета:</strong> добавляет +1 Ракету в ваш арсенал (но не более 3 штук).
+            </dd>
+
+            <dt>Приоритет 4: 💥 Запуск ракеты (Война)</dt>
+            <dd>Срабатывает последним. Тратит 1 ракету. Нельзя атаковать игрока, с которым у вас активен Пакт. Если на цели был Щит — удар блокируется. Если Щита нет — страна уничтожается.</dd>
+          </dl>
+        </div>
+
+        <div class="card">
+          <h3>🏆 Как заканчивается игра (3 финала)</h3>
+          <dl class="rules-list">
+            <dt>1. 👑 Гегемония (Мирная победа)</dt>
+            <dd>Один из выживших игроков набирает <strong>10 очков Влияния</strong>. Он становится мировым Гегемоном и побеждает (вместе с теми, чьи секретные миссии выполнены).</dd>
+
+            <dt>2. ☢️ Ядерная катастрофа (4+ запусков за игру)</dt>
+            <dd>Если за всю партию всеми игроками суммарно было запущено <strong>4 ракеты</strong> — начинается ядерная зима. По влиянию не выигрывает никто! Побеждают только игроки, выполнившие условия своей секретной миссии.</dd>
+
+            <dt>3. 🏚 Мировой Коллапс (≤ 2 выживших стран)</dt>
+            <dd>Если в результате войн в живых остается 2 или меньше держав — геополитическая система рушится, игра немедленно завершается и вскрываются секретные миссии.</dd>
+          </dl>
+        </div>
+
+        <div class="card">
+          <h3>🕵️ Все 12 Секретных Миссий в колоде</h3>
+          <p style="font-size:0.85rem; color:var(--muted); margin-top:0;">
+            В начале партии каждый получает одну случайную секретную миссию без повторов:
+          </p>
+          <div id="rules-missions-list" style="font-size:0.88rem; line-height:1.5;"></div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- НИЖНЕЕ МЕНЮ ВКЛАДОК -->
+    <nav class="bottom-nav">
+      <button class="nav-item active" onclick="switchTab('board', this)">
+        <span class="icon">🌍</span>
+        <span>Ход игры</span>
+      </button>
+      <button class="nav-item" onclick="switchTab('actions', this)">
+        <span class="icon">⚡️</span>
+        <span>Приказ</span>
+      </button>
+      <button class="nav-item" onclick="switchTab('chat', this)">
+        <span class="icon">💬</span>
+        <span>Тайный чат</span>
+        <span id="chat-badge" class="unread-dot hidden">0</span>
+      </button>
+      <button class="nav-item" onclick="switchTab('rules', this)">
+        <span class="icon">📖</span>
+        <span>Памятка</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- МОДАЛЬНОЕ ОКНО КОНЦА ИГРЫ -->
+  <div id="gameover-modal" class="hidden">
+    <div class="modal-box">
+      <h2 id="go-headline" style="color:var(--gold); margin-bottom:12px;"></h2>
+      <h4 style="margin-bottom:8px;">🕵️ Вскрытие секретных миссий:</h4>
+      <div id="go-list"></div>
+      <button class="btn btn-confirm" style="margin-top:14px;" onclick="socket.emit('reset_game')">🔄 Начать новую партию</button>
+    </div>
+  </div>
+
+  <script>
+    const socket = io();
+    let myId = null;
+    let currentTab = 'board';
+    let unreadCount = 0;
+    let draftAction = null;
+    let isActionConfirmed = false;
+
+    const ACTION_NAMES = {
+      reform: '⚡️ Реформа (+2 влияния)',
+      rocket: '🚀 Постройка ракеты (+1)',
+      shield: '🛡 Скрытый Щит',
+      pact: '🤝 Предложить Пакт',
+      sanctions: '🚫 Наложить Санкции',
+      launch: '💥 Ядерный Запуск',
+      shadow_shield: '🕶 Теневой Щит'
+    };
+
+    const NEEDS_TARGET = ['pact', 'sanctions', 'launch', 'shadow_shield'];
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function beep(freq = 600, dur = 0.1, type = 'sine') {
+      try {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = type; o.frequency.value = freq;
+        g.gain.setValueAtTime(0.12, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(); o.stop(audioCtx.currentTime + dur);
+      } catch(e) {}
+    }
+
+    function siren() {
+      try {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(320, audioCtx.currentTime);
+        o.frequency.linearRampToValueAtTime(740, audioCtx.currentTime + 0.5);
+        o.frequency.linearRampToValueAtTime(320, audioCtx.currentTime + 1.0);
+        g.gain.setValueAtTime(0.18, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1.0);
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(); o.stop(audioCtx.currentTime + 1.0);
+      } catch(e) {}
+    }
+
+    function joinGame() {
+      const name = document.getElementById('country-input').value;
+      socket.emit('join_game', name);
+    }
+
+    function switchTab(tabName, btn) {
+      currentTab = tabName;
+      document.querySelectorAll('.tab-section').forEach(s => s.classList.add('hidden'));
+      document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      if (tabName === 'chat') {
+        unreadCount = 0;
+        document.getElementById('chat-badge').classList.add('hidden');
+      }
+    }
+
+    socket.on('init_missions', (missions) => {
+      const container = document.getElementById('rules-missions-list');
+      container.innerHTML = missions.map(m => `
+        <div style="margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid var(--border);">
+          <strong style="color:var(--gold);">${m.title}</strong><br>
+          <span style="color:#cbd5e1;">${m.desc}</span>
+        </div>
+      `).join('');
+    });
+
+    socket.on('joined', (data) => {
+      myId = data.id;
+      document.getElementById('login-view').classList.add('hidden');
+      document.getElementById('app-view').classList.remove('hidden');
+      document.getElementById('my-mission-title').innerText = data.mission.title;
+      document.getElementById('my-mission-desc').innerText = data.mission.desc;
+      resetActionDraftUI();
+    });
+
+    function selectDraft(type, cardEl) {
+      if (isActionConfirmed) return;
+      draftAction = type;
+      document.querySelectorAll('.act-card').forEach(c => c.classList.remove('active'));
+      cardEl.classList.add('active');
+
+      const targetSelect = document.getElementById('action-target');
+      const targetText = targetSelect.options[targetSelect.selectedIndex]?.text || 'цели';
+      const label = NEEDS_TARGET.includes(type)
+        ? `Выбрано: ${ACTION_NAMES[type]} ➔ ${targetText}`
+        : `Выбрано: ${ACTION_NAMES[type]}`;
+
+      document.getElementById('draft-preview').innerText = label;
+      const btn = document.getElementById('confirm-btn');
+      btn.classList.remove('btn-ConfirmDisabled');
+      btn.innerText = '✅ ПОДТВЕРДИТЬ ПРИКАЗ';
+    }
+
+    function confirmOrder() {
+      if (!draftAction || isActionConfirmed) return;
+      const targetId = document.getElementById('action-target').value;
+      if (NEEDS_TARGET.includes(draftAction) && !targetId) {
+        alert('Для этого действия нужно выбрать целевую державу!');
+        return;
+      }
+      socket.emit('submit_action', { type: draftAction, targetId });
+    }
+
+    socket.on('action_confirmed', ({ type, targetName }) => {
+      isActionConfirmed = true;
+      beep(720, 0.12);
+      const btn = document.getElementById('confirm-btn');
+      btn.classList.add('btn-ConfirmDisabled');
+      btn.innerText = '🔒 ПРИКАЗ ПОДТВЕРЖДЕН (Ожидание других)';
+      document.getElementById('draft-preview').innerHTML = `<span style="color:var(--green);">Приказ отправлен в штаб: ${ACTION_NAMES[type]} ${targetName ? '➔ ' + targetName : ''}</span>`;
+    });
+
+    function resetActionDraftUI() {
+      draftAction = null;
+      isActionConfirmed = false;
+      document.querySelectorAll('.act-card').forEach(c => c.classList.remove('active'));
+      document.getElementById('draft-preview').innerText = 'Выберите действие и нажмите кнопку подтверждения';
+      const btn = document.getElementById('confirm-btn');
+      btn.classList.add('btn-ConfirmDisabled');
+      btn.innerText = '✅ ПОДТВЕРДИТЬ ПРИКАЗ';
+    }
+
+    socket.on('state_update', (state) => {
+      document.getElementById('ui-turn').innerText = state.turnNumber;
+      document.getElementById('ui-nukes').innerText = `${state.totalLaunches}/4`;
+
+      const me = state.players.find(p => p.id === myId);
+      if (me) {
+        document.getElementById('ui-my-res').innerText = me.alive ? `⚡️${me.influence} 🚀${me.rockets}` : '🕶 Подполье';
+        if (me.sanctioned && me.alive) {
+          document.getElementById('sanction-warning').classList.remove('hidden');
+          document.getElementById('order-panel').classList.add('hidden');
+        } else {
+          document.getElementById('sanction-warning').classList.add('hidden');
+          document.getElementById('order-panel').classList.remove('hidden');
+        }
+
+        if (me.alive) {
+          document.getElementById('alive-grid').classList.remove('hidden');
+          document.getElementById('dead-grid').classList.add('hidden');
+        } else {
+          document.getElementById('alive-grid').classList.add('hidden');
+          document.getElementById('dead-grid').classList.remove('hidden');
+        }
+      }
+
+      const pListEl = document.getElementById('players-list');
+      pListEl.innerHTML = state.players.map(p => {
+        let statusTag = p.alive ? '🟢 Активна' : '🕶 Теневое пр-во';
+        if (p.alive && p.sanctioned) statusTag = '🚫 Под санкциями';
+        else if (p.alive && p.immune) statusTag = '🛡 Иммунитет';
+
+        const pactsStr = p.pactsWith.length ? `<br>🤝 Пакт: ${p.pactsWith.join(', ')}` : '';
+        const readyBadge = p.sanctioned ? '🚫 Пропуск' : (p.ready ? '<span style="color:var(--green);">✅ Приказ отдан</span>' : '<span style="color:var(--gold);">⏳ Думает...</span>');
+
+        return `
+          <div class="player-row ${p.alive ? '' : 'dead'}">
+            <div>
+              <div class="p-name">${p.name} ${p.id === myId ? '(Вы)' : ''}</div>
+              <div class="p-sub">${statusTag} | ${readyBadge}${pactsStr}</div>
+            </div>
+            <div class="p-stats">
+              <div>⚡️ <strong>${p.influence}</strong>/10</div>
+              <div>🚀 <strong>${p.rockets}</strong>/3</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('logs-container').innerHTML = state.logs.map(l => `<div class="log-item">${l}</div>`).join('');
+
+      const others = state.players.filter(p => p.id !== myId);
+      const actSel = document.getElementById('action-target');
+      const chatSel = document.getElementById('chat-target');
+      const prevAct = actSel.value;
+      const prevChat = chatSel.value;
+
+      actSel.innerHTML = '';
+      chatSel.innerHTML = '';
+
+      others.forEach(o => {
+        if (o.alive) actSel.add(new Option(o.name, o.id));
+        chatSel.add(new Option(o.name, o.id));
+      });
+
+      if (prevAct) actSel.value = prevAct;
+      if (prevChat) chatSel.value = prevChat;
+
+      const goModal = document.getElementById('gameover-modal');
+      if (state.gameOverData) {
+        goModal.classList.remove('hidden');
+        document.getElementById('go-headline').innerText = state.gameOverData.headline;
+        document.getElementById('go-list').innerHTML = state.gameOverData.results.map(r => {
+          let badge = '<span style="color:var(--muted);">❌ Поражение</span>';
+          if (r.isHegemon && r.missionWon) badge = '<span style="color:var(--green); font-weight:bold;">👑 ГЕГЕМОН + МИССИЯ!</span>';
+          else if (r.isHegemon) badge = '<span style="color:var(--green); font-weight:bold;">👑 ГЕГЕМОН</span>';
+          else if (r.missionWon) badge = '<span style="color:var(--gold); font-weight:bold;">🕵️ МИССИЯ ВЫПОЛНЕНА!</span>';
+
+          return `
+            <div class="player-row">
+              <div>
+                <div class="p-name">${r.name} (${r.alive ? 'Выжил' : 'Уничтожен'})</div>
+                <div class="p-sub"><strong style="color:var(--text);">${r.missionTitle}:</strong> ${r.missionDesc}</div>
+              </div>
+              <div style="text-align:right; min-width:110px;">${badge}</div>
+            </div>
+          `;
+        }).join('');
+      } else {
+        goModal.classList.add('hidden');
+      }
+    });
+
+    let tInt = null;
+    function triggerTimer(seconds, label) {
+      socket.emit('start_timer', { seconds, label });
+    }
+
+    socket.on('timer_started', ({ seconds, label }) => {
+      clearInterval(tInt);
+      let left = seconds;
+      document.getElementById('phase-status').innerText = label;
+      const el = document.getElementById('ui-timer');
+
+      const renderT = () => {
+        const m = String(Math.floor(left / 60)).padStart(2, '0');
+        const s = String(left % 60).padStart(2, '0');
+        el.innerText = `${m}:${s}`;
+        if (left <= 10) el.classList.add('urgent');
+        else el.classList.remove('urgent');
+      };
+      renderT();
+
+      tInt = setInterval(() => {
+        left--;
+        renderT();
+        if (left <= 5 && left > 0) beep(880, 0.07);
+        if (left <= 0) {
+          clearInterval(tInt);
+          beep(440, 0.35, 'square');
+        }
+      }, 1000);
+    });
+
+    socket.on('turn_resolved', ({ rocketLaunchedThisTurn }) => {
+      clearInterval(tInt);
+      resetActionDraftUI();
+      if (rocketLaunchedThisTurn) siren();
+      else beep(540, 0.18);
+      document.getElementById('chat-feed').innerHTML = '<div style="color:var(--muted); font-size:0.82rem; text-align:center;">--- Новый раунд: архивы чата зашифрованы ---</div>';
+    });
+
+    function sendChat() {
+      const toId = document.getElementById('chat-target').value;
+      const inp = document.getElementById('chat-input');
+      if (!toId || !inp.value.trim()) return;
+      socket.emit('private_message', { toId, text: inp.value });
+      inp.value = '';
+    }
+
+    function sendQuick(text) {
+      const toId = document.getElementById('chat-target').value;
+      if (!toId) return;
+      socket.emit('private_message', { toId, text });
+    }
+
+    socket.on('chat_message', (msg) => {
+      const feed = document.getElementById('chat-feed');
+      const isMine = msg.fromId === myId;
+      const div = document.createElement('div');
+      div.className = `msg-bubble ${isMine ? 'msg-mine' : 'msg-other'}`;
+      div.innerHTML = `<div style="font-size:0.75rem; color:var(--muted); margin-bottom:2px;">${msg.fromName} ➔ ${msg.toName} (${msg.time})</div><div>${msg.text}</div>`;
+      feed.appendChild(div);
+      feed.scrollTop = feed.scrollHeight;
+
+      if (!isMine && currentTab !== 'chat') {
+        unreadCount++;
+        const badge = document.getElementById('chat-badge');
+        badge.innerText = unreadCount;
+        badge.classList.remove('hidden');
+        beep(660, 0.08);
+      }
+    });
+
+    socket.on('error_msg', (err) => alert(err));
+  </script>
+</body>
+</html>
