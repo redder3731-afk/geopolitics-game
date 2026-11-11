@@ -72,12 +72,14 @@ const MISSIONS = [
   }
 ];
 
-let players = {};
+let players = {}; // Ключ — постоянный playerId из localStorage
 let missionDeck = [];
 let totalLaunches = 0;
 let turnNumber = 1;
 let firstDeadId = null;
 let gameOverData = null;
+let roomLocked = false;
+let turnMessages = []; // Храним сообщения текущего хода на случай перезагрузки страницы
 let logs = ['🌍 Сервер запущен. Ожидание глав государств...'];
 
 function drawMission() {
@@ -87,11 +89,27 @@ function drawMission() {
   return missionDeck.pop();
 }
 
+function getPlayerBySocket(socketId) {
+  return Object.values(players).find(p => p.socketId === socketId);
+}
+
+function ensureAdminExists() {
+  const pList = Object.values(players);
+  if (pList.length === 0) return;
+  const hasAdmin = pList.some(p => p.isAdmin);
+  if (!hasAdmin) {
+    const firstOnline = pList.find(p => p.online) || pList[0];
+    firstOnline.isAdmin = true;
+  }
+}
+
 function getPublicState() {
+  ensureAdminExists();
   const list = Object.values(players).map(p => ({
     id: p.id,
     name: p.name,
     isAdmin: p.isAdmin,
+    online: p.online,
     alive: p.alive,
     influence: p.influence,
     rockets: p.rockets,
@@ -100,11 +118,33 @@ function getPublicState() {
     ready: p.action !== null,
     pactsWith: Object.keys(p.pacts).map(id => players[id]?.name).filter(Boolean)
   }));
-  return { players: list, totalLaunches, turnNumber, gameOverData, logs: logs.slice(0, 35) };
+  return {
+    players: list,
+    totalLaunches,
+    turnNumber,
+    roomLocked,
+    gameOverData,
+    logs: logs.slice(0, 35)
+  };
 }
 
 function addLog(entries) {
   logs = [...entries, ...logs].slice(0, 60);
+}
+
+function buildPlayerSessionPayload(p) {
+  const myMessages = turnMessages.filter(m => m.fromId === p.id || m.toId === p.id);
+  return {
+    id: p.id,
+    name: p.name,
+    isAdmin: p.isAdmin,
+    mission: p.mission,
+    currentAction: p.action ? {
+      type: p.action.type,
+      targetName: players[p.action.targetId]?.name || null
+    } : null,
+    chatHistory: myMessages
+  };
 }
 
 function checkEndGame() {
@@ -296,6 +336,7 @@ function executeResolveTurn() {
     p.action = null;
   });
 
+  turnMessages = []; // Очищаем архивы чата к новому ходу
   gameOverData = checkEndGame();
   if (gameOverData) {
     turnLogs.unshift(gameOverData.headline);
@@ -311,13 +352,47 @@ function executeResolveTurn() {
 io.on('connection', (socket) => {
   socket.emit('init_missions', MISSIONS);
 
-  socket.on('join_game', (name) => {
+  // Попытка автоматического восстановления сессии при обновлении страницы
+  socket.on('reconnect_session', (playerId) => {
+    if (playerId && players[playerId]) {
+      const p = players[playerId];
+      p.socketId = socket.id;
+      p.online = true;
+      socket.emit('joined', buildPlayerSessionPayload(p));
+      io.emit('state_update', getPublicState());
+    } else {
+      socket.emit('session_not_found');
+    }
+  });
+
+  // Вход нового игрока (или повторный вход с тем же токеном)
+  socket.on('join_game', ({ playerId, name }) => {
+    const cleanId = playerId || `p_${Math.random().toString(36).slice(2, 10)}`;
+
+    // Если игрок уже есть в памяти, просто восстанавливаем его
+    if (players[cleanId]) {
+      const existing = players[cleanId];
+      existing.socketId = socket.id;
+      existing.online = true;
+      if (name && name.trim()) existing.name = name.trim();
+      socket.emit('joined', buildPlayerSessionPayload(existing));
+      io.emit('state_update', getPublicState());
+      return;
+    }
+
+    if (roomLocked) {
+      socket.emit('error_msg', '🔒 Комната закрыта ведущим! Идет активная партия.');
+      return;
+    }
+
     const mission = drawMission();
     const isFirstPlayer = Object.keys(players).length === 0;
 
-    players[socket.id] = {
-      id: socket.id,
-      name: name.trim() || `Держава-${socket.id.slice(0, 3)}`,
+    players[cleanId] = {
+      id: cleanId,
+      socketId: socket.id,
+      online: true,
+      name: (name || '').trim() || `Держава-${cleanId.slice(-3)}`,
       isAdmin: isFirstPlayer,
       alive: true,
       influence: 0,
@@ -338,19 +413,62 @@ io.on('connection', (socket) => {
       }
     };
 
-    socket.emit('joined', {
-      id: socket.id,
-      name: players[socket.id].name,
-      isAdmin: isFirstPlayer,
-      mission: mission
-    });
-
-    addLog([`🟢 ${players[socket.id].name} вступает в геополитическую игру.`]);
+    socket.emit('joined', buildPlayerSessionPayload(players[cleanId]));
+    addLog([`🟢 ${players[cleanId].name} вступает в геополитическую игру.`]);
     io.emit('state_update', getPublicState());
   });
 
+  // Полный добровольный выход игрока из партии
+  socket.on('leave_game', () => {
+    const p = getPlayerBySocket(socket.id);
+    if (!p) return;
+    addLog([`🏳️ ${p.name} добровольно покинул совет держав.`]);
+    delete players[p.id];
+    ensureAdminExists();
+    socket.emit('left_game');
+    io.emit('state_update', getPublicState());
+  });
+
+  // Перехват прав ведущего, если текущий админ потерял связь
+  socket.on('claim_admin', () => {
+    const caller = getPlayerBySocket(socket.id);
+    if (!caller) return;
+    const currentAdmin = Object.values(players).find(p => p.isAdmin);
+    if (!currentAdmin || !currentAdmin.online) {
+      Object.values(players).forEach(p => { p.isAdmin = false; });
+      caller.isAdmin = true;
+      addLog([`👑 ${caller.name} принял полномочия ведущего партии.`]);
+      io.emit('state_update', getPublicState());
+    }
+  });
+
+  // Закрытие / открытие входа в комнату (только для Админа)
+  socket.on('toggle_lock', () => {
+    const caller = getPlayerBySocket(socket.id);
+    if (!caller || !caller.isAdmin) return;
+    roomLocked = !roomLocked;
+    addLog([roomLocked ? '🔒 Ведущий закрыл вход для новых игроков.' : '🔓 Ведущий открыл вход в комнату.']);
+    io.emit('state_update', getPublicState());
+  });
+
+  // Удаление отключившегося игрока (только для Админа)
+  socket.on('kick_player', (targetId) => {
+    const caller = getPlayerBySocket(socket.id);
+    if (!caller || !caller.isAdmin) return;
+    const target = players[targetId];
+    if (!target || target.id === caller.id) return;
+
+    addLog([`👢 Держава ${target.name} исключена из совета ведущим.`]);
+    if (target.socketId) {
+      io.to(target.socketId).emit('kicked');
+    }
+    delete players[targetId];
+    io.emit('state_update', getPublicState());
+  });
+
+  // Тайная дипломатия
   socket.on('private_message', ({ toId, text }) => {
-    const sender = players[socket.id];
+    const sender = getPlayerBySocket(socket.id);
     const receiver = players[toId];
     if (!sender || !receiver || !text.trim()) return;
 
@@ -363,12 +481,14 @@ io.on('connection', (socket) => {
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    io.to(toId).emit('chat_message', msgData);
+    turnMessages.push(msgData);
+    if (receiver.socketId) io.to(receiver.socketId).emit('chat_message', msgData);
     socket.emit('chat_message', msgData);
   });
 
+  // Подтверждение приказа
   socket.on('submit_action', ({ type, targetId }) => {
-    const p = players[socket.id];
+    const p = getPlayerBySocket(socket.id);
     if (!p || gameOverData) return;
     if (p.sanctioned) {
       socket.emit('error_msg', 'Вы под санкциями и пропускаете этот ход!');
@@ -378,26 +498,35 @@ io.on('connection', (socket) => {
     socket.emit('action_confirmed', { type, targetName: players[targetId]?.name || null });
     io.emit('state_update', getPublicState());
 
-    const activePlayers = Object.values(players).filter(pl => !pl.sanctioned);
+    // Авто-вскрытие, если все живые/подпольные игроки онлайн отдали приказ
+    const activePlayers = Object.values(players).filter(pl => !pl.sanctioned && pl.online);
     if (activePlayers.length >= 2 && activePlayers.every(pl => pl.action !== null)) {
       setTimeout(() => executeResolveTurn(), 600);
     }
   });
 
   socket.on('start_timer', ({ seconds, label }) => {
+    const caller = getPlayerBySocket(socket.id);
+    if (!caller || !caller.isAdmin) return;
     io.emit('timer_started', { seconds, label });
   });
 
   socket.on('resolve_turn', () => {
+    const caller = getPlayerBySocket(socket.id);
+    if (!caller || !caller.isAdmin) return;
     executeResolveTurn();
   });
 
   socket.on('reset_game', () => {
+    const caller = getPlayerBySocket(socket.id);
+    if (!caller || !caller.isAdmin) return;
+
     totalLaunches = 0;
     turnNumber = 1;
     firstDeadId = null;
     gameOverData = null;
     missionDeck = [];
+    turnMessages = [];
     logs = [`🔄 === НОВАЯ ПАРТИЯ НАЧАЛАСЬ! Всем выданы новые секретные миссии ===`];
 
     Object.values(players).forEach(p => {
@@ -420,35 +549,25 @@ io.on('connection', (socket) => {
         reachedMaxRockets: false
       };
 
-      io.to(p.id).emit('joined', {
-        id: p.id,
-        name: p.name,
-        isAdmin: p.isAdmin,
-        mission: newMission
-      });
+      if (p.socketId) {
+        io.to(p.socketId).emit('joined', buildPlayerSessionPayload(p));
+      }
     });
 
     io.emit('turn_resolved', { rocketLaunchedThisTurn: false, gameOver: false });
     io.emit('state_update', getPublicState());
   });
 
+  // При обрыве связи НЕ удаляем игрока, а переводим в режим ожидания реконнекта
   socket.on('disconnect', () => {
-    const wasAdmin = players[socket.id]?.isAdmin;
-    const leaverName = players[socket.id]?.name;
-    delete players[socket.id];
-
-    if (leaverName) addLog([`🔴 ${leaverName} покинул совет.`]);
-
-    const remaining = Object.values(players);
-    if (wasAdmin && remaining.length > 0) {
-      remaining[0].isAdmin = true;
-      io.to(remaining[0].id).emit('admin_granted');
-    }
+    const p = getPlayerBySocket(socket.id);
+    if (!p) return;
+    p.online = false;
     io.emit('state_update', getPublicState());
   });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Сервер Геополитики запущен на порту ${PORT}`);
+  console.log(`Сервер Геополитики (Надежная сборка) запущен на порту ${PORT}`);
 });

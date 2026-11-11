@@ -27,13 +27,19 @@
     .container { max-width: 600px; margin: 0 auto; padding: 14px; }
     .hidden { display: none !important; }
 
+    /* Баннер потери соединения */
+    #conn-banner {
+      background: var(--red); color: white; text-align: center;
+      padding: 6px; font-size: 0.82rem; font-weight: bold; position: sticky; top: 0; z-index: 90;
+    }
+
     .top-bar {
       background: rgba(21, 28, 44, 0.95); backdrop-filter: blur(8px);
       border-bottom: 1px solid var(--border); padding: 10px 14px;
       position: sticky; top: 0; z-index: 50;
       display: flex; justify-content: space-between; align-items: center;
     }
-    .top-metrics { display: flex; gap: 12px; font-size: 0.9rem; font-weight: 600; }
+    .top-metrics { display: flex; gap: 8px; font-size: 0.85rem; font-weight: 600; flex-wrap: wrap; }
     .badge { background: #1e293b; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--border); }
     .timer-pill { font-family: monospace; font-size: 1.15rem; font-weight: bold; color: var(--green); }
     .urgent { color: var(--red) !important; animation: pulse 0.8s infinite; }
@@ -58,6 +64,7 @@
     .btn-confirm { background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 4px 14px rgba(16,185,129,0.35); }
     .btn-ConfirmDisabled { background: #334155; color: var(--muted); box-shadow: none; pointer-events: none; }
     .btn-danger { background: var(--red); }
+    .btn-secondary { background: #1e293b; border: 1px solid var(--border); color: var(--text); }
 
     .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
     .act-card {
@@ -84,9 +91,14 @@
       border-radius: 10px; margin-bottom: 8px;
     }
     .player-row.dead { opacity: 0.45; }
-    .p-name { font-weight: 700; font-size: 1rem; }
-    .p-sub { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
-    .p-stats { text-align: right; font-size: 0.9rem; }
+    .player-row.offline { border-style: dashed; border-color: var(--gold); }
+    .p-name { font-weight: 700; font-size: 1rem; display: flex; align-items: center; gap: 6px; }
+    .p-sub { font-size: 0.8rem; color: var(--muted); margin-top: 3px; }
+    .p-stats { text-align: right; font-size: 0.9rem; display: flex; align-items: center; gap: 10px; }
+    .kick-btn {
+      background: rgba(239,68,68,0.2); border: 1px solid var(--red); color: var(--red);
+      border-radius: 6px; padding: 4px 8px; font-size: 0.75rem; cursor: pointer;
+    }
 
     .log-box {
       max-height: 220px; overflow-y: auto; font-family: monospace; font-size: 0.86rem;
@@ -141,6 +153,8 @@
 </head>
 <body>
 
+  <div id="conn-banner" class="hidden">📡 Потеряна связь с сервером. Переподключение...</div>
+
   <!-- ЭКРАН ВХОДА -->
   <div id="login-view" class="container" style="margin-top: 12vh;">
     <div class="card" style="text-align: center; padding: 24px 18px;">
@@ -177,21 +191,36 @@
           <div id="players-list"></div>
         </div>
 
-        <div class="card">
-          <h4 style="margin-bottom:10px; color:var(--muted);">⏱ Управление раундом</h4>
+        <!-- ПАНЕЛЬ ВЕДУЩЕГО (Видна только создателю комнаты / Админу) -->
+        <div id="admin-panel" class="card hidden">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <h4 style="margin:0; color:var(--gold);">👑 Панель ведущего</h4>
+            <span id="lock-badge" style="font-size:0.78rem; color:var(--muted);">🔓 Вход открыт</span>
+          </div>
           <div style="display:flex; gap:8px; margin-bottom:8px;">
-            <button class="btn" style="padding:10px; font-size:0.85rem; background:#1e293b; border:1px solid var(--border);" onclick="triggerTimer(180, 'Переговоры')">🗣 Таймер 3:00</button>
-            <button class="btn" style="padding:10px; font-size:0.85rem; background:#1e293b; border:1px solid var(--border);" onclick="triggerTimer(30, 'Запись хода!')">✍️ Таймер 0:30</button>
+            <button class="btn btn-secondary" style="padding:10px; font-size:0.85rem;" onclick="triggerTimer(180, 'Переговоры')">🗣 Таймер 3:00</button>
+            <button class="btn btn-secondary" style="padding:10px; font-size:0.85rem;" onclick="triggerTimer(30, 'Запись хода!')">✍️ Таймер 0:30</button>
           </div>
-          <div style="display:flex; gap:8px;">
-            <button class="btn btn-confirm" style="padding:11px; font-size:0.9rem;" onclick="socket.emit('resolve_turn')">💥 Вскрыть ход сейчас</button>
-            <button class="btn btn-danger" style="padding:11px; font-size:0.9rem; flex:0.45;" onclick="if(confirm('Начать новую партию?')) socket.emit('reset_game')">🔄 Сброс</button>
+          <div style="display:flex; gap:8px; margin-bottom:8px;">
+            <button class="btn btn-confirm" style="padding:11px; font-size:0.9rem;" onclick="socket.emit('resolve_turn')">💥 Вскрыть ход</button>
+            <button id="lock-btn" class="btn btn-secondary" style="padding:11px; font-size:0.85rem; flex:0.7;" onclick="socket.emit('toggle_lock')">🔒 Закрыть вход</button>
           </div>
+          <button class="btn btn-danger" style="padding:10px; font-size:0.85rem;" onclick="if(confirm('Сбросить текущую партию и раздать новые миссии?')) socket.emit('reset_game')">🔄 Начать новую партию (Сброс)</button>
+        </div>
+
+        <!-- Кнопка перехвата управления, если ведущий офлайн -->
+        <div id="claim-admin-box" class="card hidden" style="text-align:center; border-color:var(--gold);">
+          <p style="margin:0 0 8px 0; font-size:0.85rem; color:var(--gold);">Ведущий временно потерял связь с сервером.</p>
+          <button class="btn btn-secondary" style="padding:10px; font-size:0.85rem;" onclick="socket.emit('claim_admin')">👑 Взять управление раундом на себя</button>
         </div>
 
         <div class="card">
           <h3 style="margin-bottom:8px;">📡 Сводка событий</h3>
           <div id="logs-container" class="log-box"></div>
+        </div>
+
+        <div style="text-align:center; margin-top:8px;">
+          <button class="btn btn-secondary" style="width:auto; padding:8px 16px; font-size:0.8rem; color:var(--muted);" onclick="leaveRoom()">🏳️ Покинуть партию / Сменить имя</button>
         </div>
       </div>
 
@@ -212,41 +241,41 @@
           <label style="font-size:0.85rem; color:var(--muted); display:block; margin-bottom:6px;">
             1. Выберите целевую державу (для Пакта, Санкций, Запуска или ПРО):
           </label>
-          <select id="action-target"></select>
+          <select id="action-target" onchange="updateDraftPreviewText()"></select>
 
           <label style="font-size:0.85rem; color:var(--muted); display:block; margin:8px 0 8px 0;">
             2. Выберите действие на этот ход:
           </label>
 
           <div id="alive-grid" class="actions-grid">
-            <button class="act-card" onclick="selectDraft('reform', this)">
+            <button class="act-card" data-type="reform" onclick="selectDraft('reform', this)">
               <span class="act-title">⚡️ Реформа</span>
               <span class="act-sub">+2 Влияния в запас</span>
             </button>
-            <button class="act-card" onclick="selectDraft('rocket', this)">
+            <button class="act-card" data-type="rocket" onclick="selectDraft('rocket', this)">
               <span class="act-title">🚀 Ракета</span>
               <span class="act-sub">+1 Ракета (макс. 3)</span>
             </button>
-            <button class="act-card" onclick="selectDraft('shield', this)">
+            <button class="act-card" data-type="shield" onclick="selectDraft('shield', this)">
               <span class="act-title">🛡 Скрытый Щит</span>
               <span class="act-sub">Отражает 1 удар</span>
             </button>
-            <button class="act-card" onclick="selectDraft('pact', this)">
+            <button class="act-card" data-type="pact" onclick="selectDraft('pact', this)">
               <span class="act-title">🤝 Пакт с целью</span>
               <span class="act-sub">+1 Вл., 2 хода мира</span>
             </button>
-            <button class="act-card" onclick="selectDraft('sanctions', this)">
+            <button class="act-card" data-type="sanctions" onclick="selectDraft('sanctions', this)">
               <span class="act-title">🚫 Санкции</span>
               <span class="act-sub">Цель пропустит ход</span>
             </button>
-            <button class="act-card" onclick="selectDraft('launch', this)">
+            <button class="act-card" data-type="launch" onclick="selectDraft('launch', this)">
               <span class="act-title">💥 Запуск ракеты</span>
               <span class="act-sub">Уничтожить цель (-1 🚀)</span>
             </button>
           </div>
 
           <div id="dead-grid" class="hidden" style="margin-bottom:14px;">
-            <button class="act-card" style="width:100%;" onclick="selectDraft('shadow_shield', this)">
+            <button class="act-card" data-type="shadow_shield" style="width:100%;" onclick="selectDraft('shadow_shield', this)">
               <span class="act-title">🕶 Теневой Щит для выбранной цели</span>
               <span class="act-sub">Вы в подполье. Тайно защитите любую выжившую страну от ракеты в этом ходу.</span>
             </button>
@@ -269,11 +298,7 @@
           <label style="font-size:0.82rem; color:var(--muted);">Получатель шифровки:</label>
           <select id="chat-target"></select>
 
-          <div id="chat-feed">
-            <div style="color:var(--muted); font-size:0.85rem; text-align:center; margin-top:90px;">
-              Сообщений в этом раунде пока нет.<br>Все переписки видны только вам и получателю.
-            </div>
-          </div>
+          <div id="chat-feed"></div>
 
           <div class="chips-row">
             <button class="chip" onclick="sendQuick('Го обоюдный Пакт в этом ходу? 🤝')">🤝 Го пакт!</button>
@@ -292,7 +317,6 @@
 
       <!-- ВКЛАДКА 4: ПАМЯТКА И ПРАВИЛА -->
       <div id="tab-rules" class="tab-section hidden">
-        
         <div class="card">
           <h3>🎯 Суть игры «Геополитика»</h3>
           <p style="font-size:0.9rem; color:#cbd5e1; line-height:1.5; margin-bottom:10px;">
@@ -313,7 +337,7 @@
             <dd>Переговоры окончены. Каждый игрок переходит во вкладку «⚡️ Приказ», выбирает ровно одно действие (и цель, если нужно) и нажимает <strong>«Подтвердить приказ»</strong>.</dd>
 
             <dt>3. Вскрытие и последствия</dt>
-            <dd>Как только все подтвердили выбор (или истек таймер), сервер одновременно вскрывает приказы, просчитывает их по строгому приоритету и публикует итоги в «Сводке событий». В начале нового хода архивы тайного чата очищаются.</dd>
+            <dd>Как только все подтвердили выбор (или ведущий нажал кнопку вскрытия), сервер одновременно обрабатывает приказы по строгому приоритету и публикует итоги в «Сводке событий». В начале нового хода архивы тайного чата очищаются.</dd>
           </dl>
         </div>
 
@@ -378,7 +402,6 @@
           </p>
           <div id="rules-missions-list" style="font-size:0.88rem; line-height:1.5;"></div>
         </div>
-
       </div>
 
     </div>
@@ -411,13 +434,25 @@
       <h2 id="go-headline" style="color:var(--gold); margin-bottom:12px;"></h2>
       <h4 style="margin-bottom:8px;">🕵️ Вскрытие секретных миссий:</h4>
       <div id="go-list"></div>
-      <button class="btn btn-confirm" style="margin-top:14px;" onclick="socket.emit('reset_game')">🔄 Начать новую партию</button>
+      <button id="go-reset-btn" class="btn btn-confirm hidden" style="margin-top:14px;" onclick="socket.emit('reset_game')">🔄 Начать новую партию</button>
     </div>
   </div>
 
   <script>
-    const socket = io();
+    const socket = io({ reconnection: true, reconnectionDelay: 1000 });
+
+    // Генерируем или достаем постоянный токен игрока из памяти телефона
+    let myPlayerId = localStorage.getItem('geo_player_id');
+    if (!myPlayerId) {
+      myPlayerId = 'p_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+      localStorage.setItem('geo_player_id', myPlayerId);
+    }
+
+    const savedName = localStorage.getItem('geo_country_name') || '';
+    if (savedName) document.getElementById('country-input').value = savedName;
+
     let myId = null;
+    let amIAdmin = false;
     let currentTab = 'board';
     let unreadCount = 0;
     let draftAction = null;
@@ -465,10 +500,46 @@
       } catch(e) {}
     }
 
+    // При каждом подключении проверяем, есть ли наша сессия на сервере
+    socket.on('connect', () => {
+      document.getElementById('conn-banner').classList.add('hidden');
+      socket.emit('reconnect_session', myPlayerId);
+    });
+
+    socket.on('disconnect', () => {
+      document.getElementById('conn-banner').classList.remove('hidden');
+    });
+
+    socket.on('session_not_found', () => {
+      // Если сервер перезапускался, но мы уже были в игре — переподключаем автоматически по сохраненному имени
+      if (myId && localStorage.getItem('geo_country_name')) {
+        socket.emit('join_game', { playerId: myPlayerId, name: localStorage.getItem('geo_country_name') });
+      }
+    });
+
     function joinGame() {
-      const name = document.getElementById('country-input').value;
-      socket.emit('join_game', name);
+      const name = document.getElementById('country-input').value.trim();
+      if (name) localStorage.setItem('geo_country_name', name);
+      socket.emit('join_game', { playerId: myPlayerId, name });
     }
+
+    function leaveRoom() {
+      if (!confirm('Вы уверены, что хотите удалить свою державу из текущей партии?')) return;
+      socket.emit('leave_game');
+    }
+
+    socket.on('left_game', () => {
+      myId = null;
+      document.getElementById('app-view').classList.add('hidden');
+      document.getElementById('login-view').classList.remove('hidden');
+    });
+
+    socket.on('kicked', () => {
+      alert('Ведущий исключил вашу державу из партии.');
+      myId = null;
+      document.getElementById('app-view').classList.add('hidden');
+      document.getElementById('login-view').classList.remove('hidden');
+    });
 
     function switchTab(tabName, btn) {
       currentTab = tabName;
@@ -495,26 +566,46 @@
 
     socket.on('joined', (data) => {
       myId = data.id;
+      amIAdmin = data.isAdmin;
       document.getElementById('login-view').classList.add('hidden');
       document.getElementById('app-view').classList.remove('hidden');
       document.getElementById('my-mission-title').innerText = data.mission.title;
       document.getElementById('my-mission-desc').innerText = data.mission.desc;
-      resetActionDraftUI();
+
+      // Восстановление истории чата за текущий ход
+      const feed = document.getElementById('chat-feed');
+      feed.innerHTML = '';
+      if (data.chatHistory && data.chatHistory.length > 0) {
+        data.chatHistory.forEach(msg => appendChatBubble(msg, false));
+      } else {
+        feed.innerHTML = '<div id="chat-empty" style="color:var(--muted); font-size:0.85rem; text-align:center; margin-top:90px;">Сообщений в этом раунде пока нет.<br>Все переписки видны только вам и получателю.</div>';
+      }
+
+      // Восстановление подтвержденного приказа, если страница перезагружалась
+      if (data.currentAction) {
+        applyConfirmedUI(data.currentAction.type, data.currentAction.targetName, false);
+      } else {
+        resetActionDraftUI();
+      }
     });
+
+    function updateDraftPreviewText() {
+      if (!draftAction || isActionConfirmed) return;
+      const targetSelect = document.getElementById('action-target');
+      const targetText = targetSelect.options[targetSelect.selectedIndex]?.text || 'цели';
+      const label = NEEDS_TARGET.includes(draftAction)
+        ? `Выбрано: ${ACTION_NAMES[draftAction]} ➔ ${targetText}`
+        : `Выбрано: ${ACTION_NAMES[draftAction]}`;
+      document.getElementById('draft-preview').innerText = label;
+    }
 
     function selectDraft(type, cardEl) {
       if (isActionConfirmed) return;
       draftAction = type;
       document.querySelectorAll('.act-card').forEach(c => c.classList.remove('active'));
       cardEl.classList.add('active');
+      updateDraftPreviewText();
 
-      const targetSelect = document.getElementById('action-target');
-      const targetText = targetSelect.options[targetSelect.selectedIndex]?.text || 'цели';
-      const label = NEEDS_TARGET.includes(type)
-        ? `Выбрано: ${ACTION_NAMES[type]} ➔ ${targetText}`
-        : `Выбрано: ${ACTION_NAMES[type]}`;
-
-      document.getElementById('draft-preview').innerText = label;
       const btn = document.getElementById('confirm-btn');
       btn.classList.remove('btn-ConfirmDisabled');
       btn.innerText = '✅ ПОДТВЕРДИТЬ ПРИКАЗ';
@@ -530,13 +621,22 @@
       socket.emit('submit_action', { type: draftAction, targetId });
     }
 
-    socket.on('action_confirmed', ({ type, targetName }) => {
+    function applyConfirmedUI(type, targetName, playSound = true) {
       isActionConfirmed = true;
-      beep(720, 0.12);
+      draftAction = type;
+      if (playSound) beep(720, 0.12);
+      document.querySelectorAll('.act-card').forEach(c => {
+        if (c.dataset.type === type) c.classList.add('active');
+        else c.classList.remove('active');
+      });
       const btn = document.getElementById('confirm-btn');
       btn.classList.add('btn-ConfirmDisabled');
       btn.innerText = '🔒 ПРИКАЗ ПОДТВЕРЖДЕН (Ожидание других)';
       document.getElementById('draft-preview').innerHTML = `<span style="color:var(--green);">Приказ отправлен в штаб: ${ACTION_NAMES[type]} ${targetName ? '➔ ' + targetName : ''}</span>`;
+    }
+
+    socket.on('action_confirmed', ({ type, targetName }) => {
+      applyConfirmedUI(type, targetName, true);
     });
 
     function resetActionDraftUI() {
@@ -554,8 +654,29 @@
       document.getElementById('ui-nukes').innerText = `${state.totalLaunches}/4`;
 
       const me = state.players.find(p => p.id === myId);
+      const currentAdmin = state.players.find(p => p.isAdmin);
+
       if (me) {
+        amIAdmin = me.isAdmin;
         document.getElementById('ui-my-res').innerText = me.alive ? `⚡️${me.influence} 🚀${me.rockets}` : '🕶 Подполье';
+
+        // Показываем панель ведущего только Админу
+        const adminPanel = document.getElementById('admin-panel');
+        const claimBox = document.getElementById('claim-admin-box');
+        if (amIAdmin) {
+          adminPanel.classList.remove('hidden');
+          claimBox.classList.add('hidden');
+          document.getElementById('lock-badge').innerText = state.roomLocked ? '🔒 Вход закрыт' : '🔓 Вход открыт';
+          document.getElementById('lock-btn').innerText = state.roomLocked ? '🔓 Открыть вход' : '🔒 Закрыть вход';
+        } else {
+          adminPanel.classList.add('hidden');
+          if (currentAdmin && !currentAdmin.online) {
+            claimBox.classList.remove('hidden');
+          } else {
+            claimBox.classList.add('hidden');
+          }
+        }
+
         if (me.sanctioned && me.alive) {
           document.getElementById('sanction-warning').classList.remove('hidden');
           document.getElementById('order-panel').classList.add('hidden');
@@ -579,18 +700,27 @@
         if (p.alive && p.sanctioned) statusTag = '🚫 Под санкциями';
         else if (p.alive && p.immune) statusTag = '🛡 Иммунитет';
 
+        const connTag = p.online ? '' : ' <span style="color:var(--gold);">(📡 Переподключение...)</span>';
+        const crown = p.isAdmin ? '<span title="Ведущий">👑</span>' : '';
         const pactsStr = p.pactsWith.length ? `<br>🤝 Пакт: ${p.pactsWith.join(', ')}` : '';
         const readyBadge = p.sanctioned ? '🚫 Пропуск' : (p.ready ? '<span style="color:var(--green);">✅ Приказ отдан</span>' : '<span style="color:var(--gold);">⏳ Думает...</span>');
 
+        const kickBtn = (amIAdmin && p.id !== myId)
+          ? `<button class="kick-btn" title="Исключить игрока" onclick="if(confirm('Исключить ${p.name} из игры?')) socket.emit('kick_player', '${p.id}')">✖</button>`
+          : '';
+
         return `
-          <div class="player-row ${p.alive ? '' : 'dead'}">
+          <div class="player-row ${p.alive ? '' : 'dead'} ${p.online ? '' : 'offline'}">
             <div>
-              <div class="p-name">${p.name} ${p.id === myId ? '(Вы)' : ''}</div>
+              <div class="p-name">${crown} ${p.name} ${p.id === myId ? '(Вы)' : ''} ${connTag}</div>
               <div class="p-sub">${statusTag} | ${readyBadge}${pactsStr}</div>
             </div>
             <div class="p-stats">
-              <div>⚡️ <strong>${p.influence}</strong>/10</div>
-              <div>🚀 <strong>${p.rockets}</strong>/3</div>
+              <div>
+                <div>⚡️ <strong>${p.influence}</strong>/10</div>
+                <div>🚀 <strong>${p.rockets}</strong>/3</div>
+              </div>
+              ${kickBtn}
             </div>
           </div>
         `;
@@ -616,8 +746,12 @@
       if (prevChat) chatSel.value = prevChat;
 
       const goModal = document.getElementById('gameover-modal');
+      const goResetBtn = document.getElementById('go-reset-btn');
       if (state.gameOverData) {
         goModal.classList.remove('hidden');
+        if (amIAdmin) goResetBtn.classList.remove('hidden');
+        else goResetBtn.classList.add('hidden');
+
         document.getElementById('go-headline').innerText = state.gameOverData.headline;
         document.getElementById('go-list').innerHTML = state.gameOverData.results.map(r => {
           let badge = '<span style="color:var(--muted);">❌ Поражение</span>';
@@ -676,7 +810,7 @@
       resetActionDraftUI();
       if (rocketLaunchedThisTurn) siren();
       else beep(540, 0.18);
-      document.getElementById('chat-feed').innerHTML = '<div style="color:var(--muted); font-size:0.82rem; text-align:center;">--- Новый раунд: архивы чата зашифрованы ---</div>';
+      document.getElementById('chat-feed').innerHTML = '<div id="chat-empty" style="color:var(--muted); font-size:0.82rem; text-align:center; margin-top:90px;">--- Новый раунд: архивы чата зашифрованы ---</div>';
     });
 
     function sendChat() {
@@ -693,7 +827,10 @@
       socket.emit('private_message', { toId, text });
     }
 
-    socket.on('chat_message', (msg) => {
+    function appendChatBubble(msg, notify = true) {
+      const emptyEl = document.getElementById('chat-empty');
+      if (emptyEl) emptyEl.remove();
+
       const feed = document.getElementById('chat-feed');
       const isMine = msg.fromId === myId;
       const div = document.createElement('div');
@@ -702,13 +839,17 @@
       feed.appendChild(div);
       feed.scrollTop = feed.scrollHeight;
 
-      if (!isMine && currentTab !== 'chat') {
+      if (notify && !isMine && currentTab !== 'chat') {
         unreadCount++;
         const badge = document.getElementById('chat-badge');
         badge.innerText = unreadCount;
         badge.classList.remove('hidden');
         beep(660, 0.08);
       }
+    }
+
+    socket.on('chat_message', (msg) => {
+      appendChatBubble(msg, true);
     });
 
     socket.on('error_msg', (err) => alert(err));
