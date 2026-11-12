@@ -9,11 +9,22 @@ const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+const MIN_PLAYERS = 6;
+
+const PACT_COLORS = [
+  '#00f2fe', // Кибер-бирюзовый
+  '#ff0844', // Неоновый алый
+  '#b224ef', // Пурпурный
+  '#facc15', // Электрический золотой
+  '#10b981', // Изумрудный
+  '#f97316'  // Огненный оранжевый
+];
+
 const MISSIONS = [
   {
     id: 'arms_dealer',
     title: '💰 Оружейный барон',
-    desc: 'За игру должно быть запущено минимум 3 ракеты (кем угодно), а твоя страна должна остаться в живых.'
+    desc: 'За всю партию суммарно должно быть запущено минимум 3 ракеты (кем угодно), а твоя страна должна выжить.'
   },
   {
     id: 'pacifist',
@@ -28,7 +39,7 @@ const MISSIONS = [
   {
     id: 'nihilist',
     title: '☢️ Нигилист',
-    desc: 'Доведи мир до Ядерной катастрофы (суммарно запущено 4 или более ракет за игру).'
+    desc: 'Доведи мир до Ядерной зимы (запуск 4 или более ракет одновременно за ОДИН раунд).'
   },
   {
     id: 'puppeteer',
@@ -63,7 +74,7 @@ const MISSIONS = [
   {
     id: 'nuclear_baron',
     title: '🚀 Ядерный магнат',
-    desc: 'Накопи максимальный арсенал (3 ракеты одновременно) в любой момент игры и выживи до финала.'
+    desc: 'Тайно накопи максимальный арсенал (3 ракеты одновременно) в любой момент игры и выживи до финала.'
   },
   {
     id: 'agent_of_influence',
@@ -72,15 +83,17 @@ const MISSIONS = [
   }
 ];
 
-let players = {}; // Ключ — постоянный playerId из localStorage
+let players = {};
 let missionDeck = [];
 let totalLaunches = 0;
+let lastTurnLaunches = 0;
+let pactColorIndex = 0;
 let turnNumber = 1;
 let firstDeadId = null;
 let gameOverData = null;
 let roomLocked = false;
-let turnMessages = []; // Храним сообщения текущего хода на случай перезагрузки страницы
-let logs = ['🌍 Сервер запущен. Ожидание глав государств...'];
+let turnMessages = [];
+let logs = ['🌍 Сервер запущен. Ожидание минимум 6 держав для старта саммита...'];
 
 function drawMission() {
   if (missionDeck.length === 0) {
@@ -96,36 +109,57 @@ function getPlayerBySocket(socketId) {
 function ensureAdminExists() {
   const pList = Object.values(players);
   if (pList.length === 0) return;
-  const hasAdmin = pList.some(p => p.isAdmin);
-  if (!hasAdmin) {
+  if (!pList.some(p => p.isAdmin)) {
     const firstOnline = pList.find(p => p.online) || pList[0];
     firstOnline.isAdmin = true;
   }
 }
 
-function getPublicState() {
+// Формируем состояние: чужие ракеты скрыты! Каждый видит точное число ракет только у себя.
+function emitStateToAll() {
   ensureAdminExists();
-  const list = Object.values(players).map(p => ({
-    id: p.id,
-    name: p.name,
-    isAdmin: p.isAdmin,
-    online: p.online,
-    alive: p.alive,
-    influence: p.influence,
-    rockets: p.rockets,
-    sanctioned: p.sanctioned,
-    immune: p.immune,
-    ready: p.action !== null,
-    pactsWith: Object.keys(p.pacts).map(id => players[id]?.name).filter(Boolean)
-  }));
-  return {
-    players: list,
-    totalLaunches,
-    turnNumber,
-    roomLocked,
-    gameOverData,
-    logs: logs.slice(0, 35)
-  };
+  const rawList = Object.values(players);
+
+  const buildPublicPlayers = (viewerId) => rawList.map(p => {
+    const activePacts = Object.entries(p.pacts)
+      .map(([partnerId, data]) => ({
+        partnerName: players[partnerId]?.name,
+        color: data.color,
+        turnsLeft: data.turns
+      }))
+      .filter(item => item.partnerName);
+
+    return {
+      id: p.id,
+      name: p.name,
+      isAdmin: p.isAdmin,
+      online: p.online,
+      alive: p.alive,
+      influence: p.influence,
+      // Передаем количество ракет ТОЛЬКО самому владельцу! Для остальных — null (Секретно)
+      rockets: p.id === viewerId ? p.rockets : null,
+      sanctioned: p.sanctioned,
+      immune: p.immune,
+      ready: p.action !== null,
+      activePacts,
+      primaryPactColor: activePacts.length > 0 ? activePacts[0].color : null
+    };
+  });
+
+  // Отправляем персонализированный стейт каждому подключенному сокету
+  io.sockets.sockets.forEach((sock) => {
+    const viewer = getPlayerBySocket(sock.id);
+    sock.emit('state_update', {
+      players: buildPublicPlayers(viewer ? viewer.id : null),
+      minPlayers: MIN_PLAYERS,
+      totalLaunches,
+      lastTurnLaunches,
+      turnNumber,
+      roomLocked,
+      gameOverData,
+      logs: logs.slice(0, 35)
+    });
+  });
 }
 
 function addLog(entries) {
@@ -147,7 +181,7 @@ function buildPlayerSessionPayload(p) {
   };
 }
 
-function checkEndGame() {
+function checkEndGame(launchesThisTurn) {
   const pList = Object.values(players);
   const alivePlayers = pList.filter(p => p.alive);
   const hegemon = alivePlayers.find(p => p.influence >= 10);
@@ -155,15 +189,15 @@ function checkEndGame() {
   let endReason = null;
   let headline = '';
 
-  if (totalLaunches >= 4) {
+  if (launchesThisTurn >= 4) {
     endReason = 'nuclear';
-    headline = `☢️ ЯДЕРНАЯ КАТАСТРОФА! Запущено ракет: ${totalLaunches}. Мир обращен в пепел!`;
+    headline = `☢️ ЯДЕРНАЯ ЗИМА! За один раунд выпущено сразу ${launchesThisTurn} ракет! Планета погрузилась во тьму!`;
   } else if (hegemon) {
     endReason = 'hegemony';
-    headline = `👑 ГЕГЕМОНИЯ! Держава ${hegemon.name} набрала ${hegemon.influence} влияния и правит миром!`;
+    headline = `👑 ГЕГЕМОНИЯ! Держава ${hegemon.name} набрала ${hegemon.influence} влияния и установила мировой порядок!`;
   } else if (pList.length >= 3 && alivePlayers.length <= 2) {
     endReason = 'collapse';
-    headline = `🏚 КОЛЛАПС! В живых осталось слишком мало держав (${alivePlayers.length}). Система рухнула!`;
+    headline = `🏚 МИРОВОЙ КОЛЛАПС! В живых осталось слишком мало держав (${alivePlayers.length}). Система рухнула!`;
   }
 
   if (!endReason) return null;
@@ -200,37 +234,56 @@ function checkEndGame() {
   return { endReason, headline, results };
 }
 
-function executeResolveTurn() {
+function executeResolveTurn(forceByAdmin = false) {
   if (gameOverData) return;
   const pList = Object.values(players);
   if (pList.length === 0) return;
+  if (pList.length < MIN_PLAYERS && !forceByAdmin) return;
 
-  let turnLogs = [`=== ⚡️ ИТОГИ ХОДА ${turnNumber} ===`];
-  let rocketLaunchedThisTurn = false;
+  const resolvedTurnNum = turnNumber;
+  let turnLogs = [`=== ⚡️ ИТОГИ ХОДА ${resolvedTurnNum} ===`];
+  let launchesThisTurn = 0;
+
+  // Данные для пошаговой рулетки вскрытия на экранах игроков
+  let step1Diplomacy = [];
+  let step2EconomySecret = [];
+  let step3War = [];
 
   pList.forEach(p => {
     p.shield = false;
     for (let partnerId in p.pacts) {
-      p.pacts[partnerId]--;
-      if (p.pacts[partnerId] <= 0) delete p.pacts[partnerId];
+      p.pacts[partnerId].turns--;
+      if (p.pacts[partnerId].turns <= 0) delete p.pacts[partnerId];
     }
   });
 
-  // ФАЗА 1: Щиты
+  // 1. Скрытая установка Щитов и Постройка Ракет (Туман войны!)
   pList.forEach(p => {
     if (!p.action) return;
+
     if (p.alive && p.action.type === 'shield') {
       p.shield = true;
+      step2EconomySecret.push(`🕵️ <strong>${p.name}</strong>: Секретная разработка <em>(Щит или Ракета?)</em>`);
+      turnLogs.push(`🕵️ ${p.name} проводит секретную разработку (Щит или Ракета?).`);
+    } else if (p.alive && p.action.type === 'rocket') {
+      p.stats.everBuiltRocket = true;
+      if (p.rockets < 3) {
+        p.rockets += 1;
+        if (p.rockets === 3) p.stats.reachedMaxRockets = true;
+      }
+      step2EconomySecret.push(`🕵️ <strong>${p.name}</strong>: Секретная разработка <em>(Щит или Ракета?)</em>`);
+      turnLogs.push(`🕵️ ${p.name} проводит секретную разработку (Щит или Ракета?).`);
     } else if (!p.alive && p.action.type === 'shadow_shield') {
       const target = players[p.action.targetId];
       if (target && target.alive) {
         target.shield = true;
+        step2EconomySecret.push(`🕶 <strong>${p.name}</strong>: Тайная операция подполья`);
         turnLogs.push(`🕶 Теневое правительство (${p.name}) тайно усилило чью-то ПРО.`);
       }
     }
   });
 
-  // ФАЗА 2: Дипломатия
+  // 2. Дипломатия (Пакты и Санкции)
   let nextSanctioned = new Set();
   const handledPacts = new Set();
 
@@ -242,15 +295,23 @@ function executeResolveTurn() {
       const pairKey = [p.id, target?.id].sort().join('-');
       if (target && target.alive && !handledPacts.has(pairKey)) {
         if (target.action && target.action.type === 'pact' && target.action.targetId === p.id) {
+          const allianceColor = PACT_COLORS[pactColorIndex % PACT_COLORS.length];
+          pactColorIndex++;
+
           p.influence += 1;
           target.influence += 1;
-          p.pacts[target.id] = 2;
-          target.pacts[p.id] = 2;
+          p.pacts[target.id] = { turns: 2, color: allianceColor };
+          target.pacts[p.id] = { turns: 2, color: allianceColor };
           p.stats.pactsCount += 1;
           target.stats.pactsCount += 1;
           handledPacts.add(pairKey);
-          turnLogs.push(`🤝 ${p.name} и ${target.name} заключили Пакт (+1 влияния каждому, 2 хода защиты).`);
+
+          const msg = `🤝 <strong>${p.name} + ${target.name}</strong>: Неоновый Пакт (+1 ⚡️ каждому)`;
+          step1Diplomacy.push(msg);
+          turnLogs.push(`🤝 АЛЬЯНС! ${p.name} и ${target.name} заключили Пакт (+1 влияния каждому).`);
         } else {
+          const msg = `💔 <strong>${p.name}</strong> ➔ ${target.name}: Пакт отвергнут!`;
+          step1Diplomacy.push(msg);
           turnLogs.push(`💔 ${p.name} предлагал Пакт державе ${target.name}, но остался без ответа!`);
         }
       }
@@ -260,69 +321,73 @@ function executeResolveTurn() {
       const target = players[p.action.targetId];
       if (target && target.alive) {
         if (target.immune) {
+          step1Diplomacy.push(`🛡 Санкции <strong>${p.name}</strong> против ${target.name} отражены Иммунитетом!`);
           turnLogs.push(`🛡 Санкции от ${p.name} против ${target.name} отклонены (Иммунитет).`);
         } else {
           nextSanctioned.add(target.id);
           p.stats.sanctionsCount += 1;
-          turnLogs.push(`🚫 ${p.name} накладывает санкции на ${target.name}!`);
+          step1Diplomacy.push(`🚫 <strong>${p.name}</strong> блокирует санкциями <strong>${target.name}</strong>!`);
+          turnLogs.push(`🚫 ${p.name} вводит санкции против ${target.name}!`);
         }
       }
     }
   });
 
-  // ФАЗА 3: Экономика
+  // 3. Открытая экономика (Реформы)
   pList.forEach(p => {
     if (!p.alive || !p.action) return;
     if (p.action.type === 'reform') {
       p.influence += 2;
+      step2EconomySecret.unshift(`⚡️ <strong>${p.name}</strong> проводит Реформу (+2 Влияния)`);
       turnLogs.push(`⚡️ ${p.name} проводит Реформу (+2 влияния).`);
-    } else if (p.action.type === 'rocket') {
-      p.stats.everBuiltRocket = true;
-      if (p.rockets < 3) {
-        p.rockets += 1;
-        if (p.rockets === 3) p.stats.reachedMaxRockets = true;
-        turnLogs.push(`🚀 ${p.name} строит ракету (в арсенале: ${p.rockets}/3).`);
-      } else {
-        turnLogs.push(`⚠️ ${p.name} пытался построить ракету, но шахты переполнены (макс. 3).`);
-      }
     }
   });
 
-  // ФАЗА 4: Война
+  // 4. Война (Запуски ракет)
   pList.forEach(p => {
     if (!p.alive || !p.action) return;
     if (p.action.type === 'launch') {
       const target = players[p.action.targetId];
       if (!target || !target.alive) return;
       if (p.pacts[target.id]) {
-        turnLogs.push(`❌ ${p.name} пытался атаковать ${target.name}, но связан Пактом!`);
+        step3War.push(`❌ <strong>${p.name}</strong> пытался атаковать союзника ${target.name} (Блок Пактом)`);
+        turnLogs.push(`❌ ${p.name} пытался атаковать союзника ${target.name}, но связан Пактом!`);
         return;
       }
       if (p.rockets <= 0) {
-        turnLogs.push(`❌ ${p.name} нажал кнопку пуска по ${target.name}, но ракет нет!`);
+        step3War.push(`❌ <strong>${p.name}</strong> нажал кнопку пуска по ${target.name}, но это блеф (0 🚀)!`);
+        turnLogs.push(`❌ ${p.name} нажал кнопку пуска по ${target.name}, но шахты пусты!`);
         return;
       }
 
       p.rockets -= 1;
       totalLaunches += 1;
-      rocketLaunchedThisTurn = true;
+      launchesThisTurn += 1;
 
       if (target.shield) {
         target.shield = false;
         target.stats.blockedHits += 1;
-        turnLogs.push(`💥 ${p.name} запустил ракету в ${target.name}, но сработал ЩИТ! Удар отражен.`);
+        step3War.push(`💥 <strong>${p.name}</strong> выпустил ракету в <strong>${target.name}</strong> ➔ 🛡 СРАБОТАЛ ЩИТ!`);
+        turnLogs.push(`💥 ${p.name} нанес ядерный удар по ${target.name}, но сработал ЩИТ ПРО!`);
       } else {
         target.alive = false;
         target.influence = 0;
         target.rockets = 0;
+        target.pacts = {};
         p.stats.killsCount += 1;
         if (!firstDeadId) firstDeadId = target.id;
-        turnLogs.push(`☢️ ПРЯМОЕ ПОПАДАНИЕ! ${p.name} уничтожает ${target.name}. Страна уходит в подполье.`);
+        step3War.push(`☢️ <strong>${p.name}</strong> ИСПЕПЕЛЯЕТ ракетой державу <strong>${target.name}</strong>!`);
+        turnLogs.push(`☢️ ПРЯМОЕ ПОПАДАНИЕ! ${p.name} уничтожает ${target.name}. Держава уходит в подполье.`);
       }
     }
   });
 
-  // Обновление статусов санкций
+  if (step1Diplomacy.length === 0) step1Diplomacy.push('Тишина в дипломатическом корпусе...');
+  if (step2EconomySecret.length === 0) step2EconomySecret.push('Экономических и секретных приказов не зафиксировано...');
+  if (step3War.length === 0) step3War.push('🕊 В этом раунде ни одна ракета не покинула шахту.');
+
+  lastTurnLaunches = launchesThisTurn;
+
   pList.forEach(p => {
     if (p.sanctioned) {
       p.sanctioned = false;
@@ -336,8 +401,8 @@ function executeResolveTurn() {
     p.action = null;
   });
 
-  turnMessages = []; // Очищаем архивы чата к новому ходу
-  gameOverData = checkEndGame();
+  turnMessages = [];
+  gameOverData = checkEndGame(launchesThisTurn);
   if (gameOverData) {
     turnLogs.unshift(gameOverData.headline);
   } else {
@@ -345,38 +410,47 @@ function executeResolveTurn() {
   }
 
   addLog(turnLogs);
-  io.emit('turn_resolved', { rocketLaunchedThisTurn, gameOver: !!gameOverData });
-  io.emit('state_update', getPublicState());
+
+  io.emit('turn_resolved', {
+    turnNumber: resolvedTurnNum,
+    rocketLaunchedThisTurn: launchesThisTurn > 0,
+    launchesThisTurn,
+    gameOver: !!gameOverData,
+    rouletteSteps: [
+      { title: '1. Дипломатия и Санкции', items: step1Diplomacy },
+      { title: '2. Экономика и Секретные проекты', items: step2EconomySecret },
+      { title: '3. Военная сводка и Пуски', items: step3War }
+    ]
+  });
+
+  emitStateToAll();
 }
 
 io.on('connection', (socket) => {
   socket.emit('init_missions', MISSIONS);
 
-  // Попытка автоматического восстановления сессии при обновлении страницы
   socket.on('reconnect_session', (playerId) => {
     if (playerId && players[playerId]) {
       const p = players[playerId];
       p.socketId = socket.id;
       p.online = true;
       socket.emit('joined', buildPlayerSessionPayload(p));
-      io.emit('state_update', getPublicState());
+      emitStateToAll();
     } else {
       socket.emit('session_not_found');
     }
   });
 
-  // Вход нового игрока (или повторный вход с тем же токеном)
   socket.on('join_game', ({ playerId, name }) => {
     const cleanId = playerId || `p_${Math.random().toString(36).slice(2, 10)}`;
 
-    // Если игрок уже есть в памяти, просто восстанавливаем его
     if (players[cleanId]) {
       const existing = players[cleanId];
       existing.socketId = socket.id;
       existing.online = true;
       if (name && name.trim()) existing.name = name.trim();
       socket.emit('joined', buildPlayerSessionPayload(existing));
-      io.emit('state_update', getPublicState());
+      emitStateToAll();
       return;
     }
 
@@ -413,23 +487,32 @@ io.on('connection', (socket) => {
       }
     };
 
+    const currentCount = Object.keys(players).length;
     socket.emit('joined', buildPlayerSessionPayload(players[cleanId]));
-    addLog([`🟢 ${players[cleanId].name} вступает в геополитическую игру.`]);
-    io.emit('state_update', getPublicState());
+    addLog([`🟢 ${players[cleanId].name} вступает в игру (Игроков: ${currentCount}/${MIN_PLAYERS}).`]);
+    emitStateToAll();
   });
 
-  // Полный добровольный выход игрока из партии
+  // Живые реакции-эмодзи поверх экрана
+  socket.on('send_reaction', (emoji) => {
+    const p = getPlayerBySocket(socket.id);
+    if (!p) return;
+    io.emit('reaction_broadcast', {
+      senderName: p.name,
+      emoji: String(emoji).slice(0, 4)
+    });
+  });
+
   socket.on('leave_game', () => {
     const p = getPlayerBySocket(socket.id);
     if (!p) return;
-    addLog([`🏳️ ${p.name} добровольно покинул совет держав.`]);
+    addLog([`🏳️ ${p.name} покинул совет держав.`]);
     delete players[p.id];
     ensureAdminExists();
     socket.emit('left_game');
-    io.emit('state_update', getPublicState());
+    emitStateToAll();
   });
 
-  // Перехват прав ведущего, если текущий админ потерял связь
   socket.on('claim_admin', () => {
     const caller = getPlayerBySocket(socket.id);
     if (!caller) return;
@@ -437,36 +520,31 @@ io.on('connection', (socket) => {
     if (!currentAdmin || !currentAdmin.online) {
       Object.values(players).forEach(p => { p.isAdmin = false; });
       caller.isAdmin = true;
-      addLog([`👑 ${caller.name} принял полномочия ведущего партии.`]);
-      io.emit('state_update', getPublicState());
+      addLog([`👑 ${caller.name} принял полномочия ведущего.`]);
+      emitStateToAll();
     }
   });
 
-  // Закрытие / открытие входа в комнату (только для Админа)
   socket.on('toggle_lock', () => {
     const caller = getPlayerBySocket(socket.id);
     if (!caller || !caller.isAdmin) return;
     roomLocked = !roomLocked;
     addLog([roomLocked ? '🔒 Ведущий закрыл вход для новых игроков.' : '🔓 Ведущий открыл вход в комнату.']);
-    io.emit('state_update', getPublicState());
+    emitStateToAll();
   });
 
-  // Удаление отключившегося игрока (только для Админа)
   socket.on('kick_player', (targetId) => {
     const caller = getPlayerBySocket(socket.id);
     if (!caller || !caller.isAdmin) return;
     const target = players[targetId];
     if (!target || target.id === caller.id) return;
 
-    addLog([`👢 Держава ${target.name} исключена из совета ведущим.`]);
-    if (target.socketId) {
-      io.to(target.socketId).emit('kicked');
-    }
+    addLog([`👢 Держава ${target.name} исключена ведущим.`]);
+    if (target.socketId) io.to(target.socketId).emit('kicked');
     delete players[targetId];
-    io.emit('state_update', getPublicState());
+    emitStateToAll();
   });
 
-  // Тайная дипломатия
   socket.on('private_message', ({ toId, text }) => {
     const sender = getPlayerBySocket(socket.id);
     const receiver = players[toId];
@@ -486,22 +564,27 @@ io.on('connection', (socket) => {
     socket.emit('chat_message', msgData);
   });
 
-  // Подтверждение приказа
   socket.on('submit_action', ({ type, targetId }) => {
     const p = getPlayerBySocket(socket.id);
     if (!p || gameOverData) return;
+
+    const totalPlayersCount = Object.keys(players).length;
+    if (totalPlayersCount < MIN_PLAYERS) {
+      socket.emit('error_msg', `⏳ Ожидание игроков! Для начала партии нужно минимум ${MIN_PLAYERS} человек (сейчас: ${totalPlayersCount}).`);
+      return;
+    }
+
     if (p.sanctioned) {
       socket.emit('error_msg', 'Вы под санкциями и пропускаете этот ход!');
       return;
     }
     p.action = { type, targetId };
     socket.emit('action_confirmed', { type, targetName: players[targetId]?.name || null });
-    io.emit('state_update', getPublicState());
+    emitStateToAll();
 
-    // Авто-вскрытие, если все живые/подпольные игроки онлайн отдали приказ
     const activePlayers = Object.values(players).filter(pl => !pl.sanctioned && pl.online);
-    if (activePlayers.length >= 2 && activePlayers.every(pl => pl.action !== null)) {
-      setTimeout(() => executeResolveTurn(), 600);
+    if (totalPlayersCount >= MIN_PLAYERS && activePlayers.every(pl => pl.action !== null)) {
+      setTimeout(() => executeResolveTurn(false), 600);
     }
   });
 
@@ -511,10 +594,15 @@ io.on('connection', (socket) => {
     io.emit('timer_started', { seconds, label });
   });
 
-  socket.on('resolve_turn', () => {
+  socket.on('resolve_turn', (force = false) => {
     const caller = getPlayerBySocket(socket.id);
     if (!caller || !caller.isAdmin) return;
-    executeResolveTurn();
+    const totalPlayersCount = Object.keys(players).length;
+    if (totalPlayersCount < MIN_PLAYERS && !force) {
+      socket.emit('error_msg', `Нужно минимум ${MIN_PLAYERS} игроков! (Либо нажмите «Форсировать (<6)» в панели ведущего).`);
+      return;
+    }
+    executeResolveTurn(true);
   });
 
   socket.on('reset_game', () => {
@@ -522,6 +610,7 @@ io.on('connection', (socket) => {
     if (!caller || !caller.isAdmin) return;
 
     totalLaunches = 0;
+    lastTurnLaunches = 0;
     turnNumber = 1;
     firstDeadId = null;
     gameOverData = null;
@@ -554,20 +643,19 @@ io.on('connection', (socket) => {
       }
     });
 
-    io.emit('turn_resolved', { rocketLaunchedThisTurn: false, gameOver: false });
-    io.emit('state_update', getPublicState());
+    io.emit('turn_resolved', { rocketLaunchedThisTurn: false, launchesThisTurn: 0, gameOver: false, rouletteSteps: null });
+    emitStateToAll();
   });
 
-  // При обрыве связи НЕ удаляем игрока, а переводим в режим ожидания реконнекта
   socket.on('disconnect', () => {
     const p = getPlayerBySocket(socket.id);
     if (!p) return;
     p.online = false;
-    io.emit('state_update', getPublicState());
+    emitStateToAll();
   });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Сервер Геополитики (Надежная сборка) запущен на порту ${PORT}`);
+  console.log(`Сервер Геополитики запущен на порту ${PORT}`);
 });
