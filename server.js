@@ -74,7 +74,7 @@ const MISSIONS = [
   {
     id: 'nuclear_baron',
     title: '🚀 Ядерный магнат',
-    desc: 'Тайно накопи максимальный арсенал (3 ракеты одновременно) в любой момент игры и выживи до финала.'
+    desc: 'Накопи максимальный арсенал (3 ракеты одновременно) в любой момент игры и выживи до финала.'
   },
   {
     id: 'agent_of_influence',
@@ -93,7 +93,8 @@ let firstDeadId = null;
 let gameOverData = null;
 let roomLocked = false;
 let turnMessages = [];
-let logs = ['🌍 Сервер запущен. Ожидание минимум 6 держав для старта саммита...'];
+let isResolving = false;
+let logs = ['🌍 Сервер запущен. Ожидание участников саммита...'];
 
 function drawMission() {
   if (missionDeck.length === 0) {
@@ -115,10 +116,16 @@ function ensureAdminExists() {
   }
 }
 
-// Формируем состояние: чужие ракеты скрыты! Каждый видит точное число ракет только у себя.
+// Игрок пропускает приказ, если он под санкциями ИЛИ если он в подполье и его Теневой Щит на перезарядке
+function isPlayerSkippingTurn(p) {
+  return p.sanctioned || (!p.alive && p.shadowCooldown);
+}
+
 function emitStateToAll() {
   ensureAdminExists();
   const rawList = Object.values(players);
+  const activePlayers = rawList.filter(p => !isPlayerSkippingTurn(p) && p.online);
+  const readyCount = activePlayers.filter(p => p.action !== null).length;
 
   const buildPublicPlayers = (viewerId) => rawList.map(p => {
     const activePacts = Object.entries(p.pacts)
@@ -136,8 +143,9 @@ function emitStateToAll() {
       online: p.online,
       alive: p.alive,
       influence: p.influence,
-      // Передаем количество ракет ТОЛЬКО самому владельцу! Для остальных — null (Секретно)
       rockets: p.id === viewerId ? p.rockets : null,
+      shadowIntelUsed: p.id === viewerId ? p.shadowIntelUsed : undefined,
+      shadowCooldown: p.shadowCooldown,
       sanctioned: p.sanctioned,
       immune: p.immune,
       ready: p.action !== null,
@@ -146,12 +154,13 @@ function emitStateToAll() {
     };
   });
 
-  // Отправляем персонализированный стейт каждому подключенному сокету
   io.sockets.sockets.forEach((sock) => {
     const viewer = getPlayerBySocket(sock.id);
     sock.emit('state_update', {
       players: buildPublicPlayers(viewer ? viewer.id : null),
       minPlayers: MIN_PLAYERS,
+      readyCount,
+      totalActiveCount: activePlayers.length,
       totalLaunches,
       lastTurnLaunches,
       turnNumber,
@@ -173,6 +182,8 @@ function buildPlayerSessionPayload(p) {
     name: p.name,
     isAdmin: p.isAdmin,
     mission: p.mission,
+    shadowIntelUsed: p.shadowIntelUsed,
+    shadowCooldown: p.shadowCooldown,
     currentAction: p.action ? {
       type: p.action.type,
       targetName: players[p.action.targetId]?.name || null
@@ -234,51 +245,46 @@ function checkEndGame(launchesThisTurn) {
   return { endReason, headline, results };
 }
 
-function executeResolveTurn(forceByAdmin = false) {
-  if (gameOverData) return;
+function executeResolveTurn() {
+  if (gameOverData || isResolving) return;
   const pList = Object.values(players);
   if (pList.length === 0) return;
-  if (pList.length < MIN_PLAYERS && !forceByAdmin) return;
 
+  isResolving = true;
   const resolvedTurnNum = turnNumber;
   let turnLogs = [`=== ⚡️ ИТОГИ ХОДА ${resolvedTurnNum} ===`];
   let launchesThisTurn = 0;
 
-  // Данные для пошаговой рулетки вскрытия на экранах игроков
   let step1Diplomacy = [];
-  let step2EconomySecret = [];
+  let step2Economy = [];
   let step3War = [];
+  let usedShadowShieldThisTurn = new Set();
 
   pList.forEach(p => {
     p.shield = false;
+    p.wiretapTurn = null;
     for (let partnerId in p.pacts) {
       p.pacts[partnerId].turns--;
       if (p.pacts[partnerId].turns <= 0) delete p.pacts[partnerId];
     }
   });
 
-  // 1. Скрытая установка Щитов и Постройка Ракет (Туман войны!)
+  // 1. Тихая обработка Щитов и Постройки ракет
   pList.forEach(p => {
     if (!p.action) return;
-
     if (p.alive && p.action.type === 'shield') {
       p.shield = true;
-      step2EconomySecret.push(`🕵️ <strong>${p.name}</strong>: Секретная разработка <em>(Щит или Ракета?)</em>`);
-      turnLogs.push(`🕵️ ${p.name} проводит секретную разработку (Щит или Ракета?).`);
     } else if (p.alive && p.action.type === 'rocket') {
       p.stats.everBuiltRocket = true;
       if (p.rockets < 3) {
         p.rockets += 1;
         if (p.rockets === 3) p.stats.reachedMaxRockets = true;
       }
-      step2EconomySecret.push(`🕵️ <strong>${p.name}</strong>: Секретная разработка <em>(Щит или Ракета?)</em>`);
-      turnLogs.push(`🕵️ ${p.name} проводит секретную разработку (Щит или Ракета?).`);
-    } else if (!p.alive && p.action.type === 'shadow_shield') {
+    } else if (!p.alive && !p.shadowCooldown && p.action.type === 'shadow_shield') {
       const target = players[p.action.targetId];
       if (target && target.alive) {
         target.shield = true;
-        step2EconomySecret.push(`🕶 <strong>${p.name}</strong>: Тайная операция подполья`);
-        turnLogs.push(`🕶 Теневое правительство (${p.name}) тайно усилило чью-то ПРО.`);
+        usedShadowShieldThisTurn.add(p.id);
       }
     }
   });
@@ -306,12 +312,10 @@ function executeResolveTurn(forceByAdmin = false) {
           target.stats.pactsCount += 1;
           handledPacts.add(pairKey);
 
-          const msg = `🤝 <strong>${p.name} + ${target.name}</strong>: Неоновый Пакт (+1 ⚡️ каждому)`;
-          step1Diplomacy.push(msg);
+          step1Diplomacy.push(`🤝 <strong>${p.name} + ${target.name}</strong> заключили Пакт (+1 ⚡️ каждому)`);
           turnLogs.push(`🤝 АЛЬЯНС! ${p.name} и ${target.name} заключили Пакт (+1 влияния каждому).`);
         } else {
-          const msg = `💔 <strong>${p.name}</strong> ➔ ${target.name}: Пакт отвергнут!`;
-          step1Diplomacy.push(msg);
+          step1Diplomacy.push(`💔 <strong>${p.name}</strong> предлагал Пакт <strong>${target.name}</strong> — отвергнуто!`);
           turnLogs.push(`💔 ${p.name} предлагал Пакт державе ${target.name}, но остался без ответа!`);
         }
       }
@@ -321,24 +325,24 @@ function executeResolveTurn(forceByAdmin = false) {
       const target = players[p.action.targetId];
       if (target && target.alive) {
         if (target.immune) {
-          step1Diplomacy.push(`🛡 Санкции <strong>${p.name}</strong> против ${target.name} отражены Иммунитетом!`);
+          step1Diplomacy.push(`🛡 Санкции <strong>${p.name}</strong> против ${target.name} отклонены (Иммунитет)`);
           turnLogs.push(`🛡 Санкции от ${p.name} против ${target.name} отклонены (Иммунитет).`);
         } else {
           nextSanctioned.add(target.id);
           p.stats.sanctionsCount += 1;
-          step1Diplomacy.push(`🚫 <strong>${p.name}</strong> блокирует санкциями <strong>${target.name}</strong>!`);
+          step1Diplomacy.push(`🚫 <strong>${p.name}</strong> наложил санкции на <strong>${target.name}</strong>!`);
           turnLogs.push(`🚫 ${p.name} вводит санкции против ${target.name}!`);
         }
       }
     }
   });
 
-  // 3. Открытая экономика (Реформы)
+  // 3. Экономика (Реформы)
   pList.forEach(p => {
     if (!p.alive || !p.action) return;
     if (p.action.type === 'reform') {
       p.influence += 2;
-      step2EconomySecret.unshift(`⚡️ <strong>${p.name}</strong> проводит Реформу (+2 Влияния)`);
+      step2Economy.push(`⚡️ <strong>${p.name}</strong> проводит Реформу (+2 Влияния)`);
       turnLogs.push(`⚡️ ${p.name} проводит Реформу (+2 влияния).`);
     }
   });
@@ -355,7 +359,7 @@ function executeResolveTurn(forceByAdmin = false) {
         return;
       }
       if (p.rockets <= 0) {
-        step3War.push(`❌ <strong>${p.name}</strong> нажал кнопку пуска по ${target.name}, но это блеф (0 🚀)!`);
+        step3War.push(`❌ <strong>${p.name}</strong> нажал пуск по ${target.name}, но ракет нет!`);
         turnLogs.push(`❌ ${p.name} нажал кнопку пуска по ${target.name}, но шахты пусты!`);
         return;
       }
@@ -368,26 +372,28 @@ function executeResolveTurn(forceByAdmin = false) {
         target.shield = false;
         target.stats.blockedHits += 1;
         step3War.push(`💥 <strong>${p.name}</strong> выпустил ракету в <strong>${target.name}</strong> ➔ 🛡 СРАБОТАЛ ЩИТ!`);
-        turnLogs.push(`💥 ${p.name} нанес ядерный удар по ${target.name}, но сработал ЩИТ ПРО!`);
+        turnLogs.push(`💥 ${p.name} нанес ядерный удар по ${target.name}, но сработал ЩИТ!`);
       } else {
         target.alive = false;
         target.influence = 0;
         target.rockets = 0;
         target.pacts = {};
+        target.shadowCooldown = false;
         p.stats.killsCount += 1;
         if (!firstDeadId) firstDeadId = target.id;
-        step3War.push(`☢️ <strong>${p.name}</strong> ИСПЕПЕЛЯЕТ ракетой державу <strong>${target.name}</strong>!`);
+        step3War.push(`☢️ <strong>${p.name}</strong> УНИЧТОЖАЕТ ракетой державу <strong>${target.name}</strong>!`);
         turnLogs.push(`☢️ ПРЯМОЕ ПОПАДАНИЕ! ${p.name} уничтожает ${target.name}. Держава уходит в подполье.`);
       }
     }
   });
 
-  if (step1Diplomacy.length === 0) step1Diplomacy.push('Тишина в дипломатическом корпусе...');
-  if (step2EconomySecret.length === 0) step2EconomySecret.push('Экономических и секретных приказов не зафиксировано...');
-  if (step3War.length === 0) step3War.push('🕊 В этом раунде ни одна ракета не покинула шахту.');
+  if (step1Diplomacy.length === 0) step1Diplomacy.push('Ни одного пакта или санкций в этом ходу.');
+  if (step2Economy.length === 0) step2Economy.push('Ни одна держава не проводила открытых реформ.');
+  if (step3War.length === 0) step3War.push('🕊 В этом раунде ракетных пусков не зафиксировано.');
 
   lastTurnLaunches = launchesThisTurn;
 
+  // Обновление санкций и перезарядки Теневого Щита
   pList.forEach(p => {
     if (p.sanctioned) {
       p.sanctioned = false;
@@ -398,6 +404,17 @@ function executeResolveTurn(forceByAdmin = false) {
     } else {
       p.immune = false;
     }
+
+    if (!p.alive) {
+      if (usedShadowShieldThisTurn.has(p.id)) {
+        p.shadowCooldown = true; // Уходит на перезарядку на следующий раунд
+      } else {
+        p.shadowCooldown = false; // Перезарядился и снова готов
+      }
+    } else {
+      p.shadowCooldown = false;
+    }
+
     p.action = null;
   });
 
@@ -410,6 +427,7 @@ function executeResolveTurn(forceByAdmin = false) {
   }
 
   addLog(turnLogs);
+  isResolving = false;
 
   io.emit('turn_resolved', {
     turnNumber: resolvedTurnNum,
@@ -418,12 +436,20 @@ function executeResolveTurn(forceByAdmin = false) {
     gameOver: !!gameOverData,
     rouletteSteps: [
       { title: '1. Дипломатия и Санкции', items: step1Diplomacy },
-      { title: '2. Экономика и Секретные проекты', items: step2EconomySecret },
-      { title: '3. Военная сводка и Пуски', items: step3War }
+      { title: '2. Экономический рост', items: step2Economy },
+      { title: '3. Военная сводка', items: step3War }
     ]
   });
 
   emitStateToAll();
+}
+
+function checkAutoResolve() {
+  if (gameOverData || isResolving) return;
+  const activePlayers = Object.values(players).filter(pl => !isPlayerSkippingTurn(pl) && pl.online);
+  if (activePlayers.length >= 1 && activePlayers.every(pl => pl.action !== null)) {
+    setTimeout(() => executeResolveTurn(), 450);
+  }
 }
 
 io.on('connection', (socket) => {
@@ -477,6 +503,9 @@ io.on('connection', (socket) => {
       pacts: {},
       mission: mission,
       action: null,
+      shadowIntelUsed: false,
+      shadowCooldown: false,
+      wiretapTurn: null,
       stats: {
         everBuiltRocket: false,
         blockedHits: 0,
@@ -493,7 +522,42 @@ io.on('connection', (socket) => {
     emitStateToAll();
   });
 
-  // Живые реакции-эмодзи поверх экрана
+  socket.on('use_shadow_intel', ({ type, targetId }) => {
+    const p = getPlayerBySocket(socket.id);
+    if (!p || gameOverData) return;
+    if (p.alive) {
+      socket.emit('error_msg', 'Спецоперации подполья доступны только уничтоженным державам!');
+      return;
+    }
+    if (p.shadowIntelUsed) {
+      socket.emit('error_msg', 'Вы уже использовали свою единственную спецоперацию в этой партии!');
+      return;
+    }
+
+    if (type === 'spy_satellite') {
+      const target = players[targetId];
+      if (!target || !target.alive) {
+        socket.emit('error_msg', 'Выберите выжившую целевую державу в списке сверху!');
+        return;
+      }
+      p.shadowIntelUsed = true;
+      socket.emit('shadow_intel_result', {
+        type: 'spy_satellite',
+        targetName: target.name,
+        rockets: target.rockets
+      });
+      emitStateToAll();
+    } else if (type === 'wiretap') {
+      p.shadowIntelUsed = true;
+      p.wiretapTurn = turnNumber;
+      socket.emit('shadow_intel_result', {
+        type: 'wiretap',
+        messages: turnMessages
+      });
+      emitStateToAll();
+    }
+  });
+
   socket.on('send_reaction', (emoji) => {
     const p = getPlayerBySocket(socket.id);
     if (!p) return;
@@ -511,6 +575,7 @@ io.on('connection', (socket) => {
     ensureAdminExists();
     socket.emit('left_game');
     emitStateToAll();
+    checkAutoResolve();
   });
 
   socket.on('claim_admin', () => {
@@ -543,6 +608,7 @@ io.on('connection', (socket) => {
     if (target.socketId) io.to(target.socketId).emit('kicked');
     delete players[targetId];
     emitStateToAll();
+    checkAutoResolve();
   });
 
   socket.on('private_message', ({ toId, text }) => {
@@ -562,30 +628,31 @@ io.on('connection', (socket) => {
     turnMessages.push(msgData);
     if (receiver.socketId) io.to(receiver.socketId).emit('chat_message', msgData);
     socket.emit('chat_message', msgData);
+
+    Object.values(players).forEach(pl => {
+      if (!pl.alive && pl.wiretapTurn === turnNumber && pl.socketId) {
+        io.to(pl.socketId).emit('wiretap_intercepted_msg', msgData);
+      }
+    });
   });
 
   socket.on('submit_action', ({ type, targetId }) => {
     const p = getPlayerBySocket(socket.id);
     if (!p || gameOverData) return;
 
-    const totalPlayersCount = Object.keys(players).length;
-    if (totalPlayersCount < MIN_PLAYERS) {
-      socket.emit('error_msg', `⏳ Ожидание игроков! Для начала партии нужно минимум ${MIN_PLAYERS} человек (сейчас: ${totalPlayersCount}).`);
-      return;
-    }
-
     if (p.sanctioned) {
       socket.emit('error_msg', 'Вы под санкциями и пропускаете этот ход!');
       return;
     }
+    if (!p.alive && p.shadowCooldown) {
+      socket.emit('error_msg', 'Ваш Теневой Щит сейчас на перезарядке (1 раунд)!');
+      return;
+    }
+
     p.action = { type, targetId };
     socket.emit('action_confirmed', { type, targetName: players[targetId]?.name || null });
     emitStateToAll();
-
-    const activePlayers = Object.values(players).filter(pl => !pl.sanctioned && pl.online);
-    if (totalPlayersCount >= MIN_PLAYERS && activePlayers.every(pl => pl.action !== null)) {
-      setTimeout(() => executeResolveTurn(false), 600);
-    }
+    checkAutoResolve();
   });
 
   socket.on('start_timer', ({ seconds, label }) => {
@@ -594,15 +661,10 @@ io.on('connection', (socket) => {
     io.emit('timer_started', { seconds, label });
   });
 
-  socket.on('resolve_turn', (force = false) => {
+  socket.on('resolve_turn', () => {
     const caller = getPlayerBySocket(socket.id);
     if (!caller || !caller.isAdmin) return;
-    const totalPlayersCount = Object.keys(players).length;
-    if (totalPlayersCount < MIN_PLAYERS && !force) {
-      socket.emit('error_msg', `Нужно минимум ${MIN_PLAYERS} игроков! (Либо нажмите «Форсировать (<6)» в панели ведущего).`);
-      return;
-    }
-    executeResolveTurn(true);
+    executeResolveTurn();
   });
 
   socket.on('reset_game', () => {
@@ -616,6 +678,7 @@ io.on('connection', (socket) => {
     gameOverData = null;
     missionDeck = [];
     turnMessages = [];
+    isResolving = false;
     logs = [`🔄 === НОВАЯ ПАРТИЯ НАЧАЛАСЬ! Всем выданы новые секретные миссии ===`];
 
     Object.values(players).forEach(p => {
@@ -628,6 +691,9 @@ io.on('connection', (socket) => {
       p.immune = false;
       p.pacts = {};
       p.action = null;
+      p.shadowIntelUsed = false;
+      p.shadowCooldown = false;
+      p.wiretapTurn = null;
       p.mission = newMission;
       p.stats = {
         everBuiltRocket: false,
@@ -652,6 +718,7 @@ io.on('connection', (socket) => {
     if (!p) return;
     p.online = false;
     emitStateToAll();
+    checkAutoResolve();
   });
 });
 

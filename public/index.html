@@ -60,7 +60,6 @@
 
     #snow-canvas { position: fixed; inset: 0; pointer-events: none; z-index: 1; }
 
-    /* Новогодняя гирлянда */
     .garland {
       display: flex; justify-content: space-around; padding: 5px 0 8px 0;
       overflow: hidden; pointer-events: none; position: sticky; top: 54px; z-index: 49;
@@ -80,7 +79,6 @@
       padding: 6px; font-size: 0.82rem; font-weight: 700; position: sticky; top: 0; z-index: 90;
     }
 
-    /* Верхний бар */
     .top-bar {
       background: rgba(11, 17, 32, 0.92); backdrop-filter: blur(14px);
       border-bottom: 1px solid var(--ice-border); padding: 10px 14px;
@@ -147,7 +145,6 @@
       margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;
     }
 
-    /* Сетка действий */
     .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
     .act-card {
       background: rgba(9, 13, 24, 0.8); border: 2px solid var(--border); border-radius: 15px;
@@ -170,7 +167,17 @@
       box-shadow: 0 6px 25px rgba(251, 191, 36, 0.15);
     }
 
-    /* Карточка державы + Неоновая шкала Влияния + Подсветка Пактов */
+    .shadow-intel-box {
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.18), rgba(15, 23, 42, 0.95));
+      border: 1.5px solid #a855f7; border-radius: 18px; padding: 15px; margin-bottom: 14px;
+      box-shadow: 0 0 22px rgba(168, 85, 247, 0.2);
+    }
+    .intel-result-panel {
+      background: rgba(5, 8, 17, 0.92); border: 1px solid var(--gold);
+      border-radius: 12px; padding: 12px; margin-top: 10px; font-size: 0.86rem;
+      max-height: 200px; overflow-y: auto;
+    }
+
     @keyframes pactGlowPulse {
       0% { box-shadow: 0 0 8px var(--pact-color), inset 0 0 6px var(--pact-color); }
       100% { box-shadow: 0 0 22px var(--pact-color), inset 0 0 12px var(--pact-color); }
@@ -194,7 +201,6 @@
       font-weight: 800; margin-top: 6px; margin-right: 4px; color: #050811;
     }
 
-    /* Неоновый прогресс-бар Влияния */
     .inf-wrap { margin-top: 9px; }
     .inf-header { display: flex; justify-content: space-between; font-size: 0.75rem; font-weight: 800; margin-bottom: 4px; }
     .inf-track {
@@ -219,7 +225,6 @@
     }
     .log-item { padding: 6px 0; border-bottom: 1px dashed rgba(148,163,184,0.15); line-height: 1.45; }
 
-    /* Чат */
     #chat-feed {
       height: 240px; overflow-y: auto; background: rgba(5, 8, 17, 0.92); padding: 12px;
       border-radius: 14px; border: 1px solid var(--border); margin-bottom: 10px;
@@ -236,7 +241,6 @@
       padding: 7px 12px; border-radius: 99px; font-size: 0.76rem; font-weight: 600; white-space: nowrap; cursor: pointer;
     }
 
-    /* Панель быстрых Эмодзи-реакций */
     .emoji-bar {
       position: fixed; bottom: 78px; left: 50%; transform: translateX(-50%);
       background: rgba(15, 23, 42, 0.92); backdrop-filter: blur(10px);
@@ -250,7 +254,6 @@
     }
     .emoji-btn:active { transform: scale(1.4); }
 
-    /* Всплывающие эмодзи поверх экрана */
     @keyframes floatEmojiUp {
       0% { opacity: 0; transform: translateY(20px) scale(0.7); }
       15% { opacity: 1; transform: translateY(0) scale(1.05); }
@@ -265,7 +268,6 @@
       animation: floatEmojiUp 2.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
 
-    /* Нижнее меню вкладок */
     .bottom-nav {
       position: fixed; bottom: 0; left: 0; right: 0; height: 72px;
       background: rgba(9, 13, 24, 0.96); backdrop-filter: blur(14px);
@@ -284,7 +286,9 @@
       font-size: 0.68rem; padding: 2px 6px; border-radius: 99px; font-weight: 800;
     }
 
-    /* Модальные окна (Стартовые правила, Пошаговая рулетка, Финал) */
+    .rules-list dt { font-weight: 800; color: var(--gold); margin-top: 12px; font-size: 0.95rem; }
+    .rules-list dd { margin: 4px 0 10px 0; font-size: 0.88rem; color: #cbd5e1; line-height: 1.5; }
+
     .modal-overlay {
       position: fixed; inset: 0; background: rgba(4, 7, 15, 0.92); backdrop-filter: blur(8px);
       z-index: 150; display: flex; align-items: center; justify-content: center; padding: 15px;
@@ -315,43 +319,41 @@
   <!-- 1. ПЛАШКА С ПОНЯТНЫМИ ПРАВИЛАМИ ПРИ ВХОДЕ -->
   <div id="welcome-rules-modal" class="modal-overlay hidden">
     <div class="modal-box">
-      <div style="text-align:center; font-size:2.4rem; margin-bottom:4px;">🎄🕵️‍♂️☢️</div>
-      <h2 style="text-align:center; color:var(--gold); font-size:1.2rem; margin-bottom:12px;">КАК ИГРАТЬ В «ГЕОПОЛИТИКУ»</h2>
-
-      <div class="guide-step" style="border-left-color: var(--gold);">
-        <strong>🎯 Главная цель — 10 Влияния или Тайная Миссия</strong><br>
-        Набери <strong>10 очков Влияния</strong>, чтобы победить как Гегемон, ИЛИ выполни свою <strong>Секретную миссию</strong> (она написана во вкладке «⚡️ Приказ»). Победить по миссии можно даже если твою страну уничтожили!
-      </div>
+      <div style="text-align:center; font-size:2.4rem; margin-bottom:4px;">🎄🌍☢️</div>
+      <h2 style="text-align:center; color:var(--gold); font-size:1.15rem; margin-bottom:12px;">ДОБРО ПОЖАЛОВАТЬ В «ГЕОПОЛИТИКУ»!</h2>
 
       <div class="guide-step" style="border-left-color: var(--accent);">
-        <strong>🕵️ Туман войны: Щит и Ракета скрыты!</strong><br>
-        Никто за столом не видит, сколько у тебя ракет! Когда ты выбираешь <strong>«🛡 Щит»</strong> или <strong>«🚀 Ракету»</strong>, всем остальным пишется одно и то же: <em>«Секретная разработка»</em>. Пусть гадают — ты защищаешься или готовишь удар!
+        <strong>🌍 О чем эта игра?</strong><br>
+        Приветствуем на мировом саммите! Ты — лидер одной из держав. Это игра про дипломатию, интриги и блеф. Договаривайся с другими игроками вслух и в тайном чате, создавай союзы и угрожай, но помни: верить на слово нельзя никому, а силу имеет только твой тайный приказ в конце хода!
       </div>
 
       <div class="guide-step" style="border-left-color: var(--green);">
-        <strong>🤝 Как работают действия (1 приказ за ход):</strong><br>
-        • <strong>⚡️ Реформа:</strong> дает сразу +2 Влияния (но все это видят).<br>
-        • <strong>🤝 Пакт:</strong> сработает ТОЛЬКО если вы с другом оба выберете «Пакт» друг с другом в один ход! Даст обоим +1 Влияние и неоновую защиту друг от друга на 2 хода.<br>
-        • <strong>🚫 Санкции:</strong> выбранный игрок пропускает следующий ход.<br>
-        • <strong>💥 Запуск ракеты:</strong> уничтожает чужую страну (если она не поставила Щит в этот же ход).
+        <strong>⚡️ Твои действия (1 приказ за раунд):</strong><br>
+        • <strong>⚡️ Реформа:</strong> дает +2 Влияния.<br>
+        • <strong>🤝 Пакт:</strong> срабатывает, если вы с другим игроком оба выбрали «Пакт» друг с другом в один ход. Дает обоим +1 Влияние и защиту от атак друг друга на 2 хода.<br>
+        • <strong>🚫 Санкции:</strong> выбранная страна пропускает следующий ход.<br>
+        • <strong>🚀 Ракета / 🛡 Щит:</strong> постройка боеголовки (до 3 шт.) или защита от удара на этот ход.<br>
+        • <strong>💥 Запуск ракеты:</strong> уничтожает выбранную страну, если на ней нет Щита.
       </div>
 
-      <div class="guide-step" style="border-left-color: var(--red);">
-        <strong>☢️ Ядерная зима (4 ракеты за 1 раунд)</strong><br>
-        Если за <strong>один раунд</strong> всеми игроками одновременно выпущено <strong>4 ракеты</strong> — наступает конец света! По влиянию не выигрывает никто, побеждают только секретные миссии.
+      <div class="guide-step" style="border-left-color: var(--gold);">
+        <strong>🏆 Как победить и как заканчивается игра:</strong><br>
+        • <strong>👑 Гегемония:</strong> первым набери <strong>10 очков Влияния</strong>.<br>
+        • <strong>🕵️ Секретная миссия:</strong> выполни личное задание (во вкладке «⚡️ Приказ»). Победить по миссии можно даже если твою страну уничтожили!<br>
+        • <strong>☢️ Конец игры:</strong> наступает при 10 Влияния у лидера, при <strong>Коллапсе</strong> (в живых ≤ 2 стран) или при <strong>Ядерной зиме</strong> (если за <strong>один раунд</strong> выпущено <strong>4 или более ракет</strong> — тогда по влиянию не выигрывает никто, побеждают только выполненные секретные миссии!).
       </div>
 
-      <button class="btn btn-confirm" onclick="closeWelcomeModal()">🔥 ПОНЯТНО, К ПЕРЕГОВОРАМ!</button>
+      <button class="btn btn-confirm" onclick="closeWelcomeModal()">🔥 ПОНЯТНО, ВСТУПИТЬ В САММИТ!</button>
     </div>
   </div>
 
-  <!-- 2. ПОШАГОВАЯ РУЛЕТКА ВСКРЫТИЯ ХОДА -->
+  <!-- 2. АВТОМАТИЧЕСКАЯ ПОШАГОВАЯ РУЛЕТКА ВСКРЫТИЯ ХОДА -->
   <div id="roulette-modal" class="modal-overlay hidden">
     <div class="modal-box" style="border-color: var(--accent);">
-      <div style="text-align:center; font-size:0.78rem; color:var(--accent); font-weight:800; letter-spacing:1px;">РАССЕКРЕЧИВАНИЕ ПРИКАЗОВ</div>
+      <div style="text-align:center; font-size:0.78rem; color:var(--accent); font-weight:800; letter-spacing:1px;">ВСЕ ПРИКАЗЫ ПОЛУЧЕНЫ</div>
       <h2 id="roulette-title" style="text-align:center; color:var(--gold); font-size:1.25rem; margin:6px 0 14px 0;">ИТОГИ РАУНДА</h2>
       <div id="roulette-steps-container"></div>
-      <button id="roulette-close-btn" class="btn btn-confirm hidden" style="margin-top:10px;" onclick="closeRouletteModal()">ПРОДОЛЖИТЬ САММИТ</button>
+      <button id="roulette-close-btn" class="btn btn-confirm hidden" style="margin-top:10px;" onclick="closeRouletteModal()">ПРОДОЛЖИТЬ</button>
     </div>
   </div>
 
@@ -364,7 +366,7 @@
         ❄️ НОВОГОДНИЙ САММИТ (ОТ 6 ИГРОКОВ) ❄️
       </div>
       <p style="color: var(--muted); font-size: 0.88rem; margin-top: 0; margin-bottom: 22px; line-height: 1.45;">
-        Тактическая игра на переговоры, скрытый ядерный арсенал и блеф
+        Тактическая игра на переговоры, альянсы и ядерное сдерживание
       </p>
       <input type="text" id="country-input" placeholder="Название вашей державы..." maxlength="20" onkeypress="if(event.key==='Enter') joinGame()" />
       <button class="btn" onclick="joinGame()">🥂 ВСТУПИТЬ В ИГРУ</button>
@@ -377,8 +379,8 @@
       <div class="top-metrics">
         <span class="badge">🎄 Ход: <strong id="ui-turn">1</strong></span>
         <span class="badge" title="Запущено ракет за последний раунд (Ядерная зима при 4 за 1 ход)">☢️ Залп: <strong id="ui-nukes" style="color:var(--red);">0/4</strong></span>
-        <span class="badge" id="ui-my-res" style="border-color:var(--gold);">⚡️0 🚀0 (Секретно)</span>
-        <button class="snow-toggle" onclick="openWelcomeModal()" title="Краткие правила">❓</button>
+        <span class="badge" id="ui-my-res" style="border-color:var(--gold);">⚡️0 🚀0</span>
+        <button class="snow-toggle" onclick="openWelcomeModal()" title="Правила игры">❓</button>
         <button class="snow-toggle" onclick="toggleSnow()" title="Вкл/Выкл снег">❄️</button>
       </div>
       <div id="ui-timer" class="timer-pill">03:00</div>
@@ -397,8 +399,8 @@
       <!-- Индикатор набора 6 игроков -->
       <div id="lobby-wait-banner" class="lobby-banner hidden">
         <div>
-          <strong style="color:var(--accent); font-size:0.9rem;">⏳ Ожидание участников саммита</strong>
-          <div style="font-size:0.78rem; color:var(--muted);">Для начала партии нужно минимум 6 стран</div>
+          <strong style="color:var(--accent); font-size:0.9rem;">👥 Сбор участников саммита</strong>
+          <div style="font-size:0.78rem; color:var(--muted);">Рекомендуемое число игроков — от 6 стран</div>
         </div>
         <div class="font-title" id="lobby-count-badge" style="font-size:1rem; color:var(--gold);">0 / 6</div>
       </div>
@@ -408,28 +410,28 @@
         <div class="card">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
             <h3 style="margin:0; font-size:1.05rem;">🌐 Совет Держав</h3>
-            <span id="phase-status" style="font-size:0.78rem; color:var(--accent); font-weight:700;">Ожидание приказов</span>
+            <span id="phase-status" style="font-size:0.78rem; color:var(--accent); font-weight:700;">Готовы: 0/0</span>
           </div>
           <div id="players-list"></div>
         </div>
 
         <!-- ПАНЕЛЬ ВЕДУЩЕГО -->
         <div id="admin-panel" class="card hidden">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
             <h4 style="margin:0; color:var(--gold); font-family:var(--font-display); font-size:0.88rem;">🎅 Панель ведущего</h4>
             <span id="lock-badge" style="font-size:0.76rem; color:var(--muted); font-weight:700;">🔓 Вход открыт</span>
+          </div>
+          <div style="font-size:0.76rem; color:var(--muted); margin-bottom:10px;">
+            🎰 Рулетка запускается <strong>автоматически</strong>, как только все подтвердят приказ.
           </div>
           <div style="display:flex; gap:8px; margin-bottom:8px;">
             <button class="btn btn-secondary" style="padding:10px; font-size:0.82rem;" onclick="triggerTimer(180, 'Переговоры')">🗣 Таймер 3:00</button>
             <button class="btn btn-secondary" style="padding:10px; font-size:0.82rem;" onclick="triggerTimer(30, 'Запись хода!')">✍️ Таймер 0:30</button>
           </div>
-          <div style="display:flex; gap:8px; margin-bottom:8px;">
-            <button class="btn btn-confirm" style="padding:11px; font-size:0.82rem;" onclick="socket.emit('resolve_turn', false)">🎰 Запустить рулетку вскрытия</button>
-            <button id="lock-btn" class="btn btn-secondary" style="padding:11px; font-size:0.82rem; flex:0.65;" onclick="socket.emit('toggle_lock')">🔒 Вход</button>
-          </div>
           <div style="display:flex; gap:8px;">
-            <button class="btn btn-danger" style="padding:10px; font-size:0.8rem;" onclick="if(confirm('Сбросить текущую партию и раздать новые миссии?')) socket.emit('reset_game')">🔄 Новая партия</button>
-            <button class="btn btn-secondary" style="padding:10px; font-size:0.76rem; flex:0.7;" title="Вскрыть ход даже если игроков меньше 6" onclick="socket.emit('resolve_turn', true)">⚡ Форсировать (<6)</button>
+            <button class="btn btn-secondary" style="padding:10px; font-size:0.78rem;" onclick="socket.emit('resolve_turn')">⚡ Вскрыть принудительно</button>
+            <button id="lock-btn" class="btn btn-secondary" style="padding:10px; font-size:0.78rem;" onclick="socket.emit('toggle_lock')">🔒 Закрыть вход</button>
+            <button class="btn btn-danger" style="padding:10px; font-size:0.78rem;" onclick="if(confirm('Сбросить текущую партию и раздать новые миссии?')) socket.emit('reset_game')">🔄 Сброс</button>
           </div>
         </div>
 
@@ -440,7 +442,7 @@
         </div>
 
         <div class="card">
-          <h3 style="margin-bottom:8px; font-size:1rem;">📡 Архив разведданных</h3>
+          <h3 style="margin-bottom:8px; font-size:1rem;">📡 Сводка событий</h3>
           <div id="logs-container" class="log-box"></div>
         </div>
 
@@ -457,37 +459,68 @@
           <div id="my-mission-desc" style="font-size:0.88rem; color:#e2e8f0; line-height:1.45;"></div>
         </div>
 
+        <!-- Предупреждение о санкциях -->
         <div id="sanction-warning" class="card hidden" style="border-color:var(--red); background:rgba(244,63,94,0.15);">
           <strong style="color:var(--red);">🚫 Вы заморожены санкциями!</strong>
           <p style="margin:4px 0 0 0; font-size:0.88rem;">В этом ходу вы не можете отдавать приказы. На следующий ход вы получите иммунитет к санкциям.</p>
         </div>
 
+        <!-- ОДНОРАЗОВАЯ СПЕЦОПЕРАЦИЯ ТЕНЕВОГО ПРАВИТЕЛЬСТВА -->
+        <div id="shadow-intel-card" class="shadow-intel-box hidden">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:0.78rem; color:#d8b4fe; font-weight:800; text-transform:uppercase;">🕵️ Секретный ресурс подполья</span>
+            <span id="shadow-intel-badge" class="badge" style="font-size:0.72rem; border-color:#a855f7; color:#e9d5ff;">Доступно: 1 раз за игру</span>
+          </div>
+          <p style="font-size:0.82rem; color:#cbd5e1; margin:0 0 10px 0; line-height:1.4;">
+            Как выбывшая держава, вы можете <strong>один раз за всю партию</strong> активировать <strong>ОДНУ</strong> из двух развед-операций:
+          </p>
+          <div id="shadow-intel-buttons" class="actions-grid" style="margin-bottom:4px;">
+            <button class="act-card" style="border-color:#a855f7;" onclick="triggerShadowIntel('spy_satellite')">
+              <span class="act-title">🛰 Спутник-шпион</span>
+              <span class="act-sub">Узнать точное число ракет у выбранной цели</span>
+            </button>
+            <button class="act-card" style="border-color:#a855f7;" onclick="triggerShadowIntel('wiretap')">
+              <span class="act-title">📡 Прослушка чата</span>
+              <span class="act-sub">Читать все чужие тайные письма в этом ходу</span>
+            </button>
+          </div>
+          <div id="shadow-intel-output" class="intel-result-panel hidden"></div>
+        </div>
+
+        <!-- Предупреждение о перезарядке Теневого Щита -->
+        <div id="shadow-cd-warning" class="card hidden" style="border-color:var(--gold); background:rgba(251,191,36,0.12);">
+          <strong style="color:var(--gold);">🔋 Генератор Теневого Щита на перезарядке!</strong>
+          <p style="margin:4px 0 0 0; font-size:0.86rem; color:#e2e8f0;">
+            Вы использовали Теневой Щит в прошлом раунде (нельзя ставить его два хода подряд). В этом ходу ваш приказ пропускается автоматически, а в следующем раунде щит снова будет готов!
+          </p>
+        </div>
+
         <div id="order-panel" class="card">
           <label style="font-size:0.83rem; color:var(--muted); font-weight:700; display:block; margin-bottom:6px;">
-            1. Выберите целевую державу (для Пакта, Санкций, Запуска или ПРО):
+            1. Выберите целевую державу (для Пакта, Санкций, Запуска, ПРО или Спутника):
           </label>
           <select id="action-target" onchange="updateDraftPreviewText()"></select>
 
           <label style="font-size:0.83rem; color:var(--muted); font-weight:700; display:block; margin:8px 0 8px 0;">
-            2. Выберите действие (Щит и Ракета выглядят одинаково для врагов!):
+            2. Выберите действие на этот ход:
           </label>
 
           <div id="alive-grid" class="actions-grid">
             <button class="act-card" data-type="reform" onclick="selectDraft('reform', this)">
               <span class="act-title">⚡️ Реформа</span>
-              <span class="act-sub">+2 Влияния (Открыто)</span>
+              <span class="act-sub">+2 Влияния в запас</span>
             </button>
             <button class="act-card" data-type="rocket" onclick="selectDraft('rocket', this)">
-              <span class="act-title">🚀 Сделать Ракету</span>
-              <span class="act-sub">🕵️ Секретно (+1 🚀)</span>
+              <span class="act-title">🚀 Ракета</span>
+              <span class="act-sub">+1 Ракета (макс. 3)</span>
             </button>
             <button class="act-card" data-type="shield" onclick="selectDraft('shield', this)">
-              <span class="act-title">🛡 Поставить Щит</span>
-              <span class="act-sub">🕵️ Секретно (Блок удара)</span>
+              <span class="act-title">🛡 Скрытый Щит</span>
+              <span class="act-sub">Отражает 1 удар</span>
             </button>
             <button class="act-card" data-type="pact" onclick="selectDraft('pact', this)">
               <span class="act-title">🤝 Пакт с целью</span>
-              <span class="act-sub">+1 Вл., неоновый союз</span>
+              <span class="act-sub">+1 Вл., 2 хода мира</span>
             </button>
             <button class="act-card" data-type="sanctions" onclick="selectDraft('sanctions', this)">
               <span class="act-title">🚫 Санкции</span>
@@ -499,10 +532,14 @@
             </button>
           </div>
 
-          <div id="dead-grid" class="hidden" style="margin-bottom:14px;">
-            <button class="act-card" data-type="shadow_shield" style="width:100%;" onclick="selectDraft('shadow_shield', this)">
-              <span class="act-title">🕶 Тайный Подарок (Теневой Щит)</span>
-              <span class="act-sub">Вы в подполье. Тайно защитите любую выжившую страну от ракеты в этом ходу.</span>
+          <div id="dead-grid" class="actions-grid hidden">
+            <button class="act-card" data-type="shadow_shield" onclick="selectDraft('shadow_shield', this)">
+              <span class="act-title">🕶 Теневой Щит</span>
+              <span class="act-sub">Защитить цель (уйдет на перезарядку на 1 ход)</span>
+            </button>
+            <button class="act-card" data-type="shadow_wait" onclick="selectDraft('shadow_wait', this)">
+              <span class="act-title">⏳ Выждать в тени</span>
+              <span class="act-sub">Пропустить ход и сохранить Теневой Щит</span>
             </button>
           </div>
 
@@ -527,10 +564,10 @@
 
           <div class="chips-row">
             <button class="chip" onclick="sendQuick('Го обоюдный Пакт в этом ходу? 🎄🤝')">🎄 Го пакт!</button>
-            <button class="chip" onclick="sendQuick('В прошлом ходу я сделал ракету, не трогай меня! 🚀')">🚀 Я с ракетой</button>
-            <button class="chip" onclick="sendQuick('Я сейчас ставлю Щит, не трать боеголовку 🛡')">🛡 Ставлю щит</button>
+            <button class="chip" onclick="sendQuick('Не трогай меня, у меня есть ракета! 🚀')">🚀 Угроза</button>
+            <button class="chip" onclick="sendQuick('Не трать боеголовку, я под Щитом 🛡')">🛡 У меня щит</button>
             <button class="chip" onclick="sendQuick('Кидай санкции в лидера по влиянию! 🚫')">🚫 Бей лидера</button>
-            <button class="chip" onclick="sendQuick('Держи подарок: прикрою тебя Теневым щитом 🎁🕶')">🎁 Прикрою</button>
+            <button class="chip" onclick="sendQuick('Прикрою тебя Теневым щитом 🎁🕶')">🎁 Прикрою</button>
           </div>
 
           <div style="display:flex; gap:8px;">
@@ -544,46 +581,46 @@
       <div id="tab-rules" class="tab-section hidden">
         <div class="card">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <h3 style="font-size:1.05rem; margin:0;">🎄 Простые правила игры</h3>
-            <button class="btn btn-secondary" style="width:auto; padding:6px 12px; font-size:0.75rem;" onclick="openWelcomeModal()">📱 Открыть карточки</button>
+            <h3 style="font-size:1.05rem; margin:0;">🎄 Правила игры</h3>
+            <button class="btn btn-secondary" style="width:auto; padding:6px 12px; font-size:0.75rem;" onclick="openWelcomeModal()">📱 Краткая памятка</button>
           </div>
-          <p style="font-size:0.88rem; color:#cbd5e1; line-height:1.5; margin-bottom:10px;">
-            Для старта саммита нужно <strong>от 6 игроков</strong>. Каждый ход длится 3 минуты на переговоры и 30 секунд на тайный выбор приказа.
+          <p style="font-size:0.88rem; color:#cbd5e1; line-height:1.5; margin:0;">
+            В каждом раунде у вас есть время на свободные переговоры и тайный выбор одного приказа. Как только все игроки нажмут кнопку <strong>«Подтвердить приказ»</strong>, автоматически запустится пошаговая рулетка итогов хода.
           </p>
-          <div class="guide-step" style="border-left-color: var(--accent);">
-            <strong>🕵️ Главная фишка — Секретные разработки:</strong><br>
-            Количество ракет у стран <strong>скрыто</strong>! Когда игрок выбирает <strong>«🛡 Поставить Щит»</strong> или <strong>«🚀 Сделать Ракету»</strong>, в рулетке итогов пишется просто: <em>«🕵️ Секретная разработка (Щит или Ракета?)»</em>. Никто не знает, блефуете вы насчет ракеты или реально вооружились!
-          </div>
         </div>
 
         <div class="card">
-          <h3 style="font-size:1.05rem;">⚙️ В каком порядке срабатывают приказы</h3>
+          <h3 style="font-size:1.05rem;">⚙️ Как работают действия</h3>
           <dl class="rules-list" style="margin:0;">
-            <dt>Шаг 1: 🤝 Дипломатия и 🚫 Санкции</dt>
+            <dt>1. 🛡 Скрытый Щит и 🚀 Постройка ракеты</dt>
+            <dd>Выполняются тайно. Щит отражает 1 ракетный удар в текущем раунде. Ракета пополняет ваш ядерный арсенал (до 3 штук).</dd>
+
+            <dt>2. 🤝 Пакт и 🚫 Санкции (Дипломатия)</dt>
             <dd>
-              • <strong>Пакт:</strong> срабатывает, только если вы с другим игроком выбрали «Пакт» друг на друга в один ход! Оба получают <strong>+1 Влияние</strong>, одинаковую неоновую подсветку и защиту от атак друг друга на 2 хода.<br>
-              • <strong>Санкции:</strong> лишают выбранную цель следующего хода (после пропуска хода дается Иммунитет на 1 раунд).
+              • <strong>Пакт:</strong> требует обоюдного выбора! Если две страны выбрали «Пакт» друг с другом в один ход, обе получают <strong>+1 Влияние</strong> и не могут атаковать друг друга 2 хода.<br>
+              • <strong>Санкции:</strong> выбранная цель полностью пропускает следующий ход (после пропуска получает Иммунитет на 1 раунд).
             </dd>
 
-            <dt>Шаг 2: ⚡️ Реформа и 🕵️ Секретные проекты (Щит / Ракета)</dt>
-            <dd>
-              • <strong>Реформа:</strong> открыто дает +2 Влияния.<br>
-              • <strong>Секретный проект:</strong> либо включает Щит на этот ход, либо тайно добавляет +1 Ракету в вашу шахту (максимум 3 ракеты).
-            </dd>
+            <dt>3. ⚡️ Реформа (Экономика)</dt>
+            <dd>Открыто приносит вашей державе <strong>+2 Влияния</strong>.</dd>
 
-            <dt>Шаг 3: 💥 Военные пуски ракет</dt>
-            <dd>Если у вас есть ракета, вы можете запустить её в соперника. Если он в этот ход поставил Щит — ракета сгорает об щит. Если Щита не было — страна уничтожается и становится «Теневым правительством» (может раздавать тайные щиты выжившим).</dd>
+            <dt>4. 💥 Запуск ракеты и 🕶 Теневое правительство</dt>
+            <dd>
+              Запуск тратит 1 ракету. Если на цели не было Щита — страна уничтожается и переходит в статус <strong>«Теневого правительства»</strong>:<br>
+              • Выбывшая страна может тайно выдавать <strong>Теневой Щит</strong> любой выжившей державе, но после каждого применения щит уходит на <strong>перезарядку на 1 раунд</strong> (нельзя ставить щит два хода подряд). Можно также выбрать «⏳ Выждать в тени», чтобы приберечь щит.<br>
+              • <strong>Один раз за всю игру</strong> выбывшая страна может использовать секретную спецоперацию на выбор: либо <strong>🛰 Спутник-шпион</strong> (узнать точное число ракет у одной страны), либо <strong>📡 Прослушку чата</strong> (прочитать все тайные сообщения текущего раунда).
+            </dd>
           </dl>
         </div>
 
         <div class="card">
-          <h3 style="font-size:1.05rem;">🏆 Когда заканчивается игра</h3>
+          <h3 style="font-size:1.05rem;">🏆 Финалы партии</h3>
           <dl class="rules-list" style="margin:0;">
             <dt>👑 1. Гегемония (10 Влияния)</dt>
-            <dd>Выжившая страна набирает 10 очков Влияния на неоновой шкале и побеждает.</dd>
+            <dd>Выжившая страна набирает 10 очков Влияния на шкале и побеждает.</dd>
 
             <dt>☢️ 2. Ядерная зима (4+ ракеты за ОДИН раунд!)</dt>
-            <dd>Если за один ход всеми игроками сразу запущено 4 или более ракет — мир погибает! По влиянию не выигрывает никто, побеждают только те, чья секретная миссия выполнена.</dd>
+            <dd>Если за один ход всеми игроками одновременно выпущено 4 или более ракет — наступает ядерная зима! По влиянию не выигрывает никто, побеждают только выполненные секретные миссии.</dd>
 
             <dt>🏚 3. Коллапс (≤ 2 выживших стран)</dt>
             <dd>Если в живых осталось 2 или меньше стран — игра сразу заканчивается и вскрываются миссии.</dd>
@@ -708,15 +745,18 @@
     let draftAction = null;
     let isActionConfirmed = false;
     let hasShownWelcomeThisSession = false;
+    let isRouletteOpen = false;
+    let pendingGameOverData = null;
 
     const ACTION_NAMES = {
       reform: '⚡️ Реформа (+2 влияния)',
-      rocket: '🚀 Сделать Ракету (Секретно)',
-      shield: '🛡 Поставить Щит (Секретно)',
+      rocket: '🚀 Постройка ракеты (+1)',
+      shield: '🛡 Скрытый Щит',
       pact: '🤝 Предложить Пакт',
       sanctions: '🚫 Наложить Санкции',
       launch: '💥 Ядерный Запуск',
-      shadow_shield: '🕶 Теневой Щит'
+      shadow_shield: '🕶 Теневой Щит',
+      shadow_wait: '⏳ Выждать в тени (Приберечь щит)'
     };
 
     const NEEDS_TARGET = ['pact', 'sanctions', 'launch', 'shadow_shield'];
@@ -765,7 +805,6 @@
       setTimeout(() => { document.body.classList.remove('shake-screen'); }, 700);
     }
 
-    // Управление стартовым окном с правилами
     function openWelcomeModal() {
       document.getElementById('welcome-rules-modal').classList.remove('hidden');
     }
@@ -774,11 +813,62 @@
       chime();
     }
 
-    // Пошаговая рулетка вскрытия хода
+    function triggerShadowIntel(type) {
+      if (type === 'spy_satellite') {
+        const targetSelect = document.getElementById('action-target');
+        const targetId = targetSelect.value;
+        const targetName = targetSelect.options[targetSelect.selectedIndex]?.text || '';
+        if (!targetId) {
+          alert('Сначала выберите выжившую державу в выпадающем списке «1. Выберите целевую державу»!');
+          return;
+        }
+        if (!confirm(`Использовать единственную спецоперацию в игре на Спутник-шпион против «${targetName}»? (Прослушка чата станет недоступна)`)) return;
+        socket.emit('use_shadow_intel', { type: 'spy_satellite', targetId });
+      } else if (type === 'wiretap') {
+        if (!confirm('Использовать единственную спецоперацию в игре на Прослушку тайного чата всех игроков в этом раунде? (Спутник-шпион станет недоступен)')) return;
+        socket.emit('use_shadow_intel', { type: 'wiretap' });
+      }
+    }
+
+    socket.on('shadow_intel_result', (data) => {
+      chime();
+      const out = document.getElementById('shadow-intel-output');
+      out.classList.remove('hidden');
+
+      if (data.type === 'spy_satellite') {
+        out.innerHTML = `
+          <div style="color:var(--gold); font-weight:800; margin-bottom:4px;">🛰 СПУТНИКОВЫЙ СНИМОК ПОЛУЧЕН:</div>
+          <div>В ядерных шахтах державы <strong>${data.targetName}</strong> сейчас находится боеголовок: <strong style="color:var(--accent); font-size:1.05rem;">🚀 ${data.rockets} / 3</strong></div>
+        `;
+      } else if (data.type === 'wiretap') {
+        const listHtml = (data.messages && data.messages.length > 0)
+          ? data.messages.map(m => `<div style="padding:4px 0; border-bottom:1px dashed rgba(255,255,255,0.1);"><strong>${m.fromName} ➔ ${m.toName}</strong> (${m.time}): ${m.text}</div>`).join('')
+          : '<div style="color:var(--muted);" id="wiretap-empty">В этом раунде тайных писем пока не было. Новые сообщения появятся здесь автоматически...</div>';
+        out.innerHTML = `
+          <div style="color:var(--gold); font-weight:800; margin-bottom:6px;">📡 ПЕРЕХВАТ ТАЙНОГО ЧАТА (ТЕКУЩИЙ РАУНД):</div>
+          <div id="wiretap-stream">${listHtml}</div>
+        `;
+      }
+    });
+
+    socket.on('wiretap_intercepted_msg', (m) => {
+      const stream = document.getElementById('wiretap-stream');
+      if (!stream) return;
+      const empty = document.getElementById('wiretap-empty');
+      if (empty) empty.remove();
+
+      const row = document.createElement('div');
+      row.style.cssText = 'padding:4px 0; border-bottom:1px dashed rgba(255,255,255,0.1);';
+      row.innerHTML = `<strong>${m.fromName} ➔ ${m.toName}</strong> (${m.time}): ${m.text}`;
+      stream.appendChild(row);
+      beep(784, 0.08);
+    });
+
     let rouletteTimers = [];
     function showStepByStepRoulette(turnNum, steps, rocketLaunched) {
       rouletteTimers.forEach(t => clearTimeout(t));
       rouletteTimers = [];
+      isRouletteOpen = true;
 
       const modal = document.getElementById('roulette-modal');
       const container = document.getElementById('roulette-steps-container');
@@ -807,18 +897,50 @@
           container.appendChild(stepDiv);
 
           if (idx === steps.length - 1) {
+            closeBtn.innerText = pendingGameOverData ? '🏆 ПЕРЕЙТИ К ИТОГАМ ПАРТИИ' : 'ПРОДОЛЖИТЬ САММИТ';
             closeBtn.classList.remove('hidden');
           }
-        }, idx * 1700);
+        }, idx * 1400);
         rouletteTimers.push(t);
       });
     }
 
     function closeRouletteModal() {
+      isRouletteOpen = false;
       document.getElementById('roulette-modal').classList.add('hidden');
+      if (pendingGameOverData) {
+        renderGameOverModal(pendingGameOverData);
+      }
     }
 
-    // Отправка и отображение эмодзи-реакций
+    function renderGameOverModal(goData) {
+      const goModal = document.getElementById('gameover-modal');
+      const goResetBtn = document.getElementById('go-reset-btn');
+      goModal.classList.remove('hidden');
+      if (amIAdmin) goResetBtn.classList.remove('hidden');
+      else goResetBtn.classList.add('hidden');
+
+      document.getElementById('go-headline').innerText = goData.headline;
+      document.getElementById('go-list').innerHTML = goData.results.map(r => {
+        let badge = '<span style="color:var(--muted);">❌ Поражение</span>';
+        if (r.isHegemon && r.missionWon) badge = '<span style="color:var(--green); font-weight:800;">👑 ГЕГЕМОН + МИССИЯ!</span>';
+        else if (r.isHegemon) badge = '<span style="color:var(--green); font-weight:800;">👑 ГЕГЕМОН</span>';
+        else if (r.missionWon) badge = '<span style="color:var(--gold); font-weight:800;">🎁 МИССИЯ ВЫПОЛНЕНА!</span>';
+
+        return `
+          <div class="player-row">
+            <div class="p-top">
+              <div>
+                <div class="p-name">${r.name} (${r.alive ? 'Выжил' : 'Уничтожен'})</div>
+                <div class="p-sub"><strong style="color:var(--text);">${r.missionTitle}:</strong> ${r.missionDesc}</div>
+              </div>
+              <div style="text-align:right; min-width:110px;">${badge}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
     let lastEmojiSent = 0;
     function sendReaction(emoji) {
       if (Date.now() - lastEmojiSent < 800) return;
@@ -855,7 +977,7 @@
     function joinGame() {
       const name = document.getElementById('country-input').value.trim();
       if (name) localStorage.setItem('geo_country_name', name);
-      hasShownWelcomeThisSession = false; // Покажем правила при входе
+      hasShownWelcomeThisSession = false;
       socket.emit('join_game', { playerId: myPlayerId, name });
     }
 
@@ -908,7 +1030,6 @@
       document.getElementById('my-mission-title').innerText = data.mission.title;
       document.getElementById('my-mission-desc').innerText = data.mission.desc;
 
-      // При первом входе сразу показываем плашку с правилами
       if (!hasShownWelcomeThisSession) {
         hasShownWelcomeThisSession = true;
         openWelcomeModal();
@@ -942,7 +1063,7 @@
     function selectDraft(type, cardEl) {
       if (isActionConfirmed) return;
       draftAction = type;
-      document.querySelectorAll('.act-card').forEach(c => c.classList.remove('active'));
+      document.querySelectorAll('#alive-grid .act-card, #dead-grid .act-card').forEach(c => c.classList.remove('active'));
       cardEl.classList.add('active');
       updateDraftPreviewText();
 
@@ -965,14 +1086,14 @@
       isActionConfirmed = true;
       draftAction = type;
       if (playSound) chime();
-      document.querySelectorAll('.act-card').forEach(c => {
+      document.querySelectorAll('#alive-grid .act-card, #dead-grid .act-card').forEach(c => {
         if (c.dataset.type === type) c.classList.add('active');
         else c.classList.remove('active');
       });
       const btn = document.getElementById('confirm-btn');
       btn.classList.add('btn-ConfirmDisabled');
-      btn.innerText = '🔒 ПРИКАЗ ЗАСЕКРЕЧЕН (Ожидание других)';
-      document.getElementById('draft-preview').innerHTML = `<span style="color:var(--green);">Приказ отправлен в штаб: ${ACTION_NAMES[type]} ${targetName ? '➔ ' + targetName : ''}</span>`;
+      btn.innerText = '🔒 ПРИКАЗ ПОДТВЕРЖДЕН (Ждем остальных)';
+      document.getElementById('draft-preview').innerHTML = `<span style="color:var(--green);">Ваш выбор: ${ACTION_NAMES[type]} ${targetName ? '➔ ' + targetName : ''}</span>`;
     }
 
     socket.on('action_confirmed', ({ type, targetName }) => {
@@ -982,7 +1103,7 @@
     function resetActionDraftUI() {
       draftAction = null;
       isActionConfirmed = false;
-      document.querySelectorAll('.act-card').forEach(c => c.classList.remove('active'));
+      document.querySelectorAll('#alive-grid .act-card, #dead-grid .act-card').forEach(c => c.classList.remove('active'));
       document.getElementById('draft-preview').innerText = 'Выберите действие и нажмите кнопку подтверждения';
       const btn = document.getElementById('confirm-btn');
       btn.classList.add('btn-ConfirmDisabled');
@@ -992,10 +1113,11 @@
     socket.on('state_update', (state) => {
       document.getElementById('ui-turn').innerText = state.turnNumber;
       document.getElementById('ui-nukes').innerText = `${state.lastTurnLaunches || 0}/4`;
+      document.getElementById('phase-status').innerText = `Готовы: ${state.readyCount || 0} / ${state.totalActiveCount || 0}`;
 
       const lobbyBanner = document.getElementById('lobby-wait-banner');
       const minP = state.minPlayers || 6;
-      if (state.players.length < minP) {
+      if (state.turnNumber === 1 && state.players.length < minP) {
         lobbyBanner.classList.remove('hidden');
         document.getElementById('lobby-count-badge').innerText = `${state.players.length} / ${minP}`;
       } else {
@@ -1007,7 +1129,7 @@
 
       if (me) {
         amIAdmin = me.isAdmin;
-        document.getElementById('ui-my-res').innerText = me.alive ? `⚡️${me.influence}/10 | 🚀 Мои ракеты: ${me.rockets}/3` : '🕶 Вы в подполье';
+        document.getElementById('ui-my-res').innerText = me.alive ? `⚡️${me.influence}/10 | 🚀 ${me.rockets}/3` : '🕶 В подполье';
 
         const adminPanel = document.getElementById('admin-panel');
         const claimBox = document.getElementById('claim-admin-box');
@@ -1015,7 +1137,7 @@
           adminPanel.classList.remove('hidden');
           claimBox.classList.add('hidden');
           document.getElementById('lock-badge').innerText = state.roomLocked ? '🔒 Вход закрыт' : '🔓 Вход открыт';
-          document.getElementById('lock-btn').innerText = state.roomLocked ? '🔓 Открыть' : '🔒 Закрыть';
+          document.getElementById('lock-btn').innerText = state.roomLocked ? '🔓 Открыть вход' : '🔒 Закрыть вход';
         } else {
           adminPanel.classList.add('hidden');
           if (currentAdmin && !currentAdmin.online) {
@@ -1025,20 +1147,49 @@
           }
         }
 
-        if (me.sanctioned && me.alive) {
-          document.getElementById('sanction-warning').classList.remove('hidden');
-          document.getElementById('order-panel').classList.add('hidden');
-        } else {
-          document.getElementById('sanction-warning').classList.add('hidden');
-          document.getElementById('order-panel').classList.remove('hidden');
-        }
+        const sanctionWarning = document.getElementById('sanction-warning');
+        const shadowCdWarning = document.getElementById('shadow-cd-warning');
+        const orderPanel = document.getElementById('order-panel');
+        const shadowIntelCard = document.getElementById('shadow-intel-card');
 
         if (me.alive) {
+          shadowIntelCard.classList.add('hidden');
+          shadowCdWarning.classList.add('hidden');
           document.getElementById('alive-grid').classList.remove('hidden');
           document.getElementById('dead-grid').classList.add('hidden');
+
+          if (me.sanctioned) {
+            sanctionWarning.classList.remove('hidden');
+            orderPanel.classList.add('hidden');
+          } else {
+            sanctionWarning.classList.add('hidden');
+            orderPanel.classList.remove('hidden');
+          }
         } else {
+          sanctionWarning.classList.add('hidden');
           document.getElementById('alive-grid').classList.add('hidden');
           document.getElementById('dead-grid').classList.remove('hidden');
+          shadowIntelCard.classList.remove('hidden');
+
+          if (me.shadowCooldown) {
+            shadowCdWarning.classList.remove('hidden');
+            orderPanel.classList.add('hidden');
+          } else {
+            shadowCdWarning.classList.add('hidden');
+            orderPanel.classList.remove('hidden');
+          }
+
+          const intelBtns = document.getElementById('shadow-intel-buttons');
+          const intelBadge = document.getElementById('shadow-intel-badge');
+          if (me.shadowIntelUsed) {
+            intelBtns.classList.add('hidden');
+            intelBadge.innerText = '🔒 Использовано';
+            intelBadge.style.color = 'var(--muted)';
+          } else {
+            intelBtns.classList.remove('hidden');
+            intelBadge.innerText = 'Доступно: 1 раз за игру';
+            intelBadge.style.color = '#e9d5ff';
+          }
         }
       }
 
@@ -1050,7 +1201,17 @@
 
         const connTag = p.online ? '' : ' <span style="color:var(--gold);">(📡 Офлайн)</span>';
         const crown = p.isAdmin ? '<span title="Ведущий">🎅</span>' : '';
-        const readyBadge = p.sanctioned ? '🚫 Пропуск' : (p.ready ? '<span style="color:var(--green);">🎁 Приказ готов</span>' : '<span style="color:var(--gold);">⏳ Думает...</span>');
+
+        let readyBadge = '';
+        if (p.sanctioned) {
+          readyBadge = '🚫 Пропуск';
+        } else if (!p.alive && p.shadowCooldown) {
+          readyBadge = '<span style="color:var(--muted);">🔋 Перезарядка ПРО</span>';
+        } else if (p.ready) {
+          readyBadge = '<span style="color:var(--green);">✅ Приказ готов</span>';
+        } else {
+          readyBadge = '<span style="color:var(--gold);">⏳ Думает...</span>';
+        }
 
         const hasPactClass = p.primaryPactColor ? 'has-pact' : '';
         const pactStyle = p.primaryPactColor ? `style="--pact-color: ${p.primaryPactColor};"` : '';
@@ -1058,16 +1219,14 @@
           `<span class="pact-pill" style="background:${pact.color}; box-shadow: 0 0 10px ${pact.color};">🤝 Пакт: ${pact.partnerName} (${pact.turnsLeft}х)</span>`
         ).join('');
 
-        // Неоновая шкала влияния
         const pct = Math.min(100, Math.max(0, (p.influence / 10) * 100));
         let barColorClass = 'inf-low';
         if (p.influence >= 8) barColorClass = 'inf-high';
         else if (p.influence >= 5) barColorClass = 'inf-mid';
 
-        // Ракеты чужих стран скрыты!
-        const rocketStatusText = (p.id === myId)
-          ? `🚀 Ваши ракеты: <strong>${p.rockets}/3</strong>`
-          : `🚀 Арсенал: <span style="color:var(--muted);">🕵️ Скрыто</span>`;
+        const myRocketsInfo = (p.id === myId && p.alive)
+          ? `<span style="font-size:0.78rem; color:var(--gold); font-weight:700;">🚀 ${p.rockets}/3</span>`
+          : '';
 
         const kickBtn = (amIAdmin && p.id !== myId)
           ? `<button class="kick-btn" title="Исключить игрока" onclick="if(confirm('Исключить ${p.name} из игры?')) socket.emit('kick_player', '${p.id}')">✖</button>`
@@ -1080,15 +1239,15 @@
                 <div class="p-name">${crown} ${p.name} ${p.id === myId ? '(Вы)' : ''} ${connTag}</div>
                 <div class="p-sub">${statusTag} | ${readyBadge}</div>
               </div>
-              <div style="text-align:right; font-size:0.78rem;">
-                ${rocketStatusText}
+              <div style="text-align:right;">
+                ${myRocketsInfo}
                 ${kickBtn}
               </div>
             </div>
             ${pactBadges ? `<div>${pactBadges}</div>` : ''}
             <div class="inf-wrap">
               <div class="inf-header">
-                <span style="color:var(--muted);">⚡️ ВЛИЯНИЕ ДЕРЖАВЫ</span>
+                <span style="color:var(--muted);">⚡️ ВЛИЯНИЕ</span>
                 <span style="color:${p.influence >= 8 ? 'var(--red)' : 'var(--text)'};">${p.influence} / 10</span>
               </div>
               <div class="inf-track">
@@ -1118,33 +1277,12 @@
       if (prevAct) actSel.value = prevAct;
       if (prevChat) chatSel.value = prevChat;
 
+      pendingGameOverData = state.gameOverData;
       const goModal = document.getElementById('gameover-modal');
-      const goResetBtn = document.getElementById('go-reset-btn');
       if (state.gameOverData) {
-        closeRouletteModal();
-        goModal.classList.remove('hidden');
-        if (amIAdmin) goResetBtn.classList.remove('hidden');
-        else goResetBtn.classList.add('hidden');
-
-        document.getElementById('go-headline').innerText = state.gameOverData.headline;
-        document.getElementById('go-list').innerHTML = state.gameOverData.results.map(r => {
-          let badge = '<span style="color:var(--muted);">❌ Поражение</span>';
-          if (r.isHegemon && r.missionWon) badge = '<span style="color:var(--green); font-weight:800;">👑 ГЕГЕМОН + МИССИЯ!</span>';
-          else if (r.isHegemon) badge = '<span style="color:var(--green); font-weight:800;">👑 ГЕГЕМОН</span>';
-          else if (r.missionWon) badge = '<span style="color:var(--gold); font-weight:800;">🎁 МИССИЯ ВЫПОЛНЕНА!</span>';
-
-          return `
-            <div class="player-row">
-              <div class="p-top">
-                <div>
-                  <div class="p-name">${r.name} (${r.alive ? 'Выжил' : 'Уничтожен'})</div>
-                  <div class="p-sub"><strong style="color:var(--text);">${r.missionTitle}:</strong> ${r.missionDesc}</div>
-                </div>
-                <div style="text-align:right; min-width:110px;">${badge}</div>
-              </div>
-            </div>
-          `;
-        }).join('');
+        if (!isRouletteOpen) {
+          renderGameOverModal(state.gameOverData);
+        }
       } else {
         goModal.classList.add('hidden');
       }
@@ -1181,16 +1319,16 @@
       }, 1000);
     });
 
-    socket.on('turn_resolved', ({ turnNumber, rocketLaunchedThisTurn, gameOver, rouletteSteps }) => {
+    socket.on('turn_resolved', ({ turnNumber, rocketLaunchedThisTurn, rouletteSteps }) => {
       clearInterval(tInt);
       resetActionDraftUI();
+      document.getElementById('shadow-intel-output').classList.add('hidden');
       document.getElementById('chat-feed').innerHTML = '<div id="chat-empty" style="color:var(--muted); font-size:0.82rem; text-align:center; margin-top:80px;">❄️ Новый раунд: старые письма замело снегом ❄️</div>';
 
-      if (rouletteSteps && !gameOver) {
+      if (rouletteSteps) {
         showStepByStepRoulette(turnNumber, rouletteSteps, rocketLaunchedThisTurn);
-      } else if (rocketLaunchedThisTurn) {
-        siren();
-        triggerNuclearVisualEffect();
+      } else {
+        closeRouletteModal();
       }
     });
 
